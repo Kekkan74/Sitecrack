@@ -1,6 +1,7 @@
 /* ==========================================================================
    Sitecrack Modern Glass UI Controller (app.js)
-   Incluye Banners Glass, Avisos a Todo Color y Repetidor en Vivo (Antes/Después).
+   Incluye Banners Glass, Avisos a Todo Color, Repetidor en Vivo,
+   Inspector de Sesiones/Cookies y Exportador de Informes HTML/PDF.
    ========================================================================== */
 
 const state = {
@@ -9,6 +10,7 @@ const state = {
   activeTab: "security",
   hostFilter: "",
   methodFilter: "",
+  gradeFilter: "",
   lastComparison: null,
 };
 
@@ -89,6 +91,16 @@ function getPlainVerdict(flow) {
   return `🚨 Riesgo alto: esta respuesta tiene ${missingCount} carencias críticas de protección.`;
 }
 
+function getFilteredFlows() {
+  if (!state.gradeFilter) return state.flows;
+  return state.flows.filter((f) => {
+    const g = f.security_audit.grade;
+    if (state.gradeFilter === "safe") return g === "A" || g === "B";
+    if (state.gradeFilter === "risk") return g === "C" || g === "D" || g === "F";
+    return true;
+  });
+}
+
 async function fetchTelemetry() {
   const params = new URLSearchParams({ limit: "100" });
   if (state.hostFilter) params.set("host", state.hostFilter);
@@ -109,10 +121,11 @@ async function fetchTelemetry() {
 
   renderFlowList();
 
-  if (state.flows.length > 0) {
-    const exists = state.flows.some((f) => f.id === state.selectedFlowId);
+  const visibleFlows = getFilteredFlows();
+  if (visibleFlows.length > 0) {
+    const exists = visibleFlows.some((f) => f.id === state.selectedFlowId);
     if (!exists) {
-      state.selectedFlowId = state.flows[0].id;
+      state.selectedFlowId = visibleFlows[0].id;
     }
     renderInspector();
   } else {
@@ -123,17 +136,19 @@ async function fetchTelemetry() {
 
 function renderFlowList() {
   const container = document.getElementById("flow-list");
-  if (state.flows.length === 0) {
+  const visibleFlows = getFilteredFlows();
+
+  if (visibleFlows.length === 0) {
     container.innerHTML = `
       <div class="empty-placeholder">
-        <p style="font-weight:700; color:var(--text-main); margin-bottom:0.35rem;">Lista vacía</p>
-        <p style="font-size:0.84rem;">Pulsa <strong>"Cargar ejemplos"</strong> o <strong>"＋ Nueva prueba"</strong> arriba a la derecha.</p>
+        <p style="font-weight:700; color:var(--text-main); margin-bottom:0.35rem;">Sin peticiones para este filtro</p>
+        <p style="font-size:0.84rem;">Pulsa <strong>"Cargar ejemplos"</strong> o cambia el filtro superior.</p>
       </div>
     `;
     return;
   }
 
-  container.innerHTML = state.flows
+  container.innerHTML = visibleFlows
     .map((flow) => {
       const selectedCls = flow.id === state.selectedFlowId ? "selected" : "";
       const gradeTone = getToneByGrade(flow.security_audit.grade);
@@ -190,12 +205,14 @@ function buildComparisonBannerHtml(flowId) {
   if (!cmp || cmp.new_flow.id !== flowId || cmp.previous_grade === null) {
     return "";
   }
-  const deltaSign = cmp.score_delta >= 0 ? `+${cmp.score_delta}` : `${cmp.score_delta}`;
+  const deltaSign =
+    cmp.score_delta >= 0 ? `+${cmp.score_delta}` : `${cmp.score_delta}`;
   const fixedBadges =
     cmp.fixed_headers.length > 0
       ? cmp.fixed_headers
           .map(
-            (h) => `<span class="pill pill-safe">✔ Corregido: ${escapeHtml(h)}</span>`
+            (h) =>
+              `<span class="pill pill-safe">✔ Corregido: ${escapeHtml(h)}</span>`
           )
           .join("")
       : `<span class="pill pill-warn">Sin cambios en escudos</span>`;
@@ -211,6 +228,99 @@ function buildComparisonBannerHtml(flowId) {
           <span class="diff-delta">${deltaSign} pts</span>
         </div>
         <div class="fixed-chips">${fixedBadges}</div>
+      </div>
+    </div>
+  `;
+}
+
+function buildSessionCookieTabHtml(flow) {
+  const reqAuth =
+    flow.request_headers["Authorization"] ||
+    flow.request_headers["authorization"] ||
+    null;
+  const reqCookie =
+    flow.request_headers["Cookie"] || flow.request_headers["cookie"] || null;
+  const setCookie =
+    flow.response_headers["Set-Cookie"] ||
+    flow.response_headers["set-cookie"] ||
+    "";
+
+  const hasSecure = /;\s*secure/i.test(setCookie) || flow.scheme === "https";
+  const hasHttpOnly = /;\s*httponly/i.test(setCookie);
+  const hasSameSite = /;\s*samesite=(strict|lax)/i.test(setCookie);
+
+  const sessionBanner = reqAuth || reqCookie
+    ? `<div class="alert-banner sev-SAFE">
+         <span class="alert-badge-tag">🔒 CWE-532</span>
+         <div class="alert-text-group">
+           <span class="alert-title">Credenciales de sesión enmascaradas automáticamente</span>
+           <span class="alert-desc">Sitecrack oculta tokens Bearer y cookies en la base de datos para impedir filtraciones accidentales.</span>
+         </div>
+       </div>`
+    : `<div class="alert-banner sev-INFO">
+         <span class="alert-badge-tag">ℹ SESIÓN</span>
+         <div class="alert-text-group">
+           <span class="alert-title">Petición anónima sin credenciales adjuntas</span>
+           <span class="alert-desc">Esta transacción no envió cabeceras Cookie ni Authorization.</span>
+         </div>
+       </div>`;
+
+  const cookieFlags = [
+    {
+      name: "Atributo Secure (Solo HTTPS)",
+      ok: hasSecure,
+      desc: "Garantiza que la cookie de sesión nunca se transmita por conexiones HTTP sin cifrar.",
+    },
+    {
+      name: "Atributo HttpOnly (Anti-XSS)",
+      ok: hasHttpOnly,
+      desc: "Impide que scripts maliciosos en el navegador lean la cookie mediante document.cookie.",
+    },
+    {
+      name: "Atributo SameSite (Anti-CSRF)",
+      ok: hasSameSite,
+      desc: "Evita que sitios externos disparen peticiones autenticadas en nombre del usuario.",
+    },
+  ];
+
+  const cards = cookieFlags
+    .map((flag) => {
+      const cls = flag.ok ? "card-active" : "card-missing";
+      const badge = flag.ok
+        ? `<span class="pill pill-safe">✔ Activo</span>`
+        : `<span class="pill pill-warn">⚠ No detectado</span>`;
+      return `
+        <div class="protection-card ${cls}">
+          <div>
+            <div class="protection-header">
+              <span class="protection-name">${escapeHtml(flag.name)}</span>
+              ${badge}
+            </div>
+            <p class="protection-desc" style="margin-top:0.4rem;">${escapeHtml(flag.desc)}</p>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="alerts-banner-list">${sessionBanner}</div>
+    <div class="protection-grid">${cards}</div>
+    <div class="section-box">
+      <div class="section-title">🍪 Detalle de Tokens y Cookies en esta Transacción</div>
+      <div class="kv-list">
+        <div class="kv-row">
+          <span class="kv-key">Authorization (Cliente)</span>
+          <span class="kv-val">${escapeHtml(reqAuth || "No enviado")}</span>
+        </div>
+        <div class="kv-row">
+          <span class="kv-key">Cookie (Cliente)</span>
+          <span class="kv-val">${escapeHtml(reqCookie || "No enviada")}</span>
+        </div>
+        <div class="kv-row">
+          <span class="kv-key">Set-Cookie (Servidor)</span>
+          <span class="kv-val">${escapeHtml(setCookie || "El servidor no asignó nueva cookie en esta respuesta")}</span>
+        </div>
       </div>
     </div>
   `;
@@ -309,7 +419,6 @@ function renderInspector() {
           </p>
         </div>
 
-        <!-- Botones Rápidos de Inyección de Escudos -->
         <div>
           <div style="font-size:0.78rem; font-weight:700; color:var(--text-secondary); margin-bottom:0.4rem;">
             ⚡ Inyectar protecciones con 1 clic:
@@ -324,7 +433,6 @@ function renderInspector() {
           </div>
         </div>
 
-        <!-- Fila Método + URL + Código -->
         <div class="repeater-row">
           <div class="field">
             <label for="rep-method">Método</label>
@@ -373,6 +481,8 @@ function renderInspector() {
         </div>
       </div>
     `;
+  } else if (state.activeTab === "cookies") {
+    tabBodyHtml = buildSessionCookieTabHtml(flow);
   } else if (state.activeTab === "headers") {
     const reqList = Object.entries(flow.request_headers)
       .map(
@@ -446,11 +556,14 @@ function renderInspector() {
       <button class="seg-btn ${state.activeTab === "repeater" ? "active" : ""}" data-tab="repeater" type="button">
         🔁 Repetidor en Vivo
       </button>
+      <button class="seg-btn ${state.activeTab === "cookies" ? "active" : ""}" data-tab="cookies" type="button">
+        🍪 Sesiones y Cookies
+      </button>
       <button class="seg-btn ${state.activeTab === "headers" ? "active" : ""}" data-tab="headers" type="button">
-        📋 Cabeceras Técnicas
+        📋 Cabeceras
       </button>
       <button class="seg-btn ${state.activeTab === "payload" ? "active" : ""}" data-tab="payload" type="button">
-        📦 Contenido / Datos
+        📦 Datos
       </button>
     </div>
 
@@ -578,9 +691,26 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchTelemetry();
   });
 
+  document.getElementById("select-grade-filter").addEventListener("change", (e) => {
+    state.gradeFilter = e.target.value;
+    renderFlowList();
+    const visible = getFilteredFlows();
+    if (visible.length > 0) {
+      state.selectedFlowId = visible[0].id;
+      renderInspector();
+    } else {
+      state.selectedFlowId = null;
+      renderEmptyInspector();
+    }
+  });
+
   document.getElementById("select-method-filter").addEventListener("change", (e) => {
     state.methodFilter = e.target.value;
     fetchTelemetry();
+  });
+
+  document.getElementById("btn-export-report").addEventListener("click", () => {
+    window.open("/api/v1/report/html", "_blank");
   });
 
   document.getElementById("btn-seed-demo").addEventListener("click", async () => {

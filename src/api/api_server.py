@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from src.api.database import FlowRepositoryProtocol, SQLiteFlowRepository
 from src.core.repeater_service import RepeaterService
+from src.core.report_generator import generate_html_audit_report
 from src.core.security_analyzer import PassiveSecurityAnalyzer, sanitize_headers
 from src.domain.schemas import (
     HttpFlowCreate,
@@ -285,3 +286,36 @@ def clear_captured_flows(
     """Limpia el historial de flujos almacenados en la base de datos local."""
     deleted_count = repo.clear_flows()
     return {"deleted": deleted_count}
+
+
+@app.get(
+    "/api/v1/report/html",
+    response_class=HTMLResponse,
+    tags=["Reports"],
+)
+def export_html_report(
+    repo: FlowRepositoryProtocol = Depends(get_repository),
+) -> HTMLResponse:
+    """Genera y sirve el Informe Ejecutivo HTML de Auditoría listo para imprimir/PDF."""
+    flows = repo.list_flows(limit=250)
+    stats = repo.get_stats()
+    html_doc = generate_html_audit_report(flows=flows, stats=stats)
+    return HTMLResponse(content=html_doc)
+
+
+@app.get(
+    "/api/v1/report/json",
+    tags=["Reports"],
+)
+def export_json_report(
+    repo: FlowRepositoryProtocol = Depends(get_repository),
+) -> dict[str, object]:
+    """Exporta las métricas y flujos auditados en formato JSON estructurado."""
+    flows = repo.list_flows(limit=250)
+    stats = repo.get_stats()
+    return {
+        "service": "Sitecrack Passive Security Auditor",
+        "stats": stats.model_dump(),
+        "flows": [f.model_dump() for f in flows],
+    }
+

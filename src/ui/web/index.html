@@ -29,6 +29,9 @@
         <button id="btn-open-simulator" class="btn btn-primary" type="button">
           ＋ Nueva prueba
         </button>
+        <button id="btn-export-report" class="btn" type="button" title="Abrir informe ejecutivo listo para imprimir o guardar en PDF">
+          📄 Exportar Informe
+        </button>
         <button id="btn-seed-demo" class="btn" type="button">
           Cargar ejemplos
         </button>
@@ -56,8 +59,13 @@
             placeholder="Buscar web o ruta..."
             aria-label="Buscar web o ruta"
           />
+          <select id="select-grade-filter" class="method-select" aria-label="Filtrar por seguridad">
+            <option value="">Todas</option>
+            <option value="risk">🚨 Con avisos</option>
+            <option value="safe">✔ Seguras</option>
+          </select>
           <select id="select-method-filter" class="method-select" aria-label="Método">
-            <option value="">Todos</option>
+            <option value="">Método</option>
             <option value="GET">GET</option>
             <option value="POST">POST</option>
             <option value="PUT">PUT</option>

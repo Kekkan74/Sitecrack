@@ -13,6 +13,8 @@ from unittest.mock import MagicMock
 from src.api.api_server import (
     SimulationRequest,
     clear_captured_flows,
+    export_html_report,
+    export_json_report,
     get_flow_detail,
     get_traffic_stats,
     health_check,
@@ -233,4 +235,12 @@ def test_repeater_before_after_comparison_and_ssrf_guard(tmp_path: Path) -> None
     assert rep_result.score_delta == 100
     assert "HTTPS / TLS Cifrado" in rep_result.fixed_headers
     assert "Strict-Transport-Security" in rep_result.fixed_headers
+
+    # 4. Verificar exportación de Informe Ejecutivo HTML y JSON
+    html_report = export_html_report(repo=repo)
+    assert "Informe Ejecutivo de Auditoría Web" in html_report.body.decode("utf-8")
+
+    json_report = export_json_report(repo=repo)
+    assert json_report["stats"]["total_flows"] == 2  # type: ignore[index]
+
 
