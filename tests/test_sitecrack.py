@@ -1,7 +1,7 @@
 """
-Suite de Pruebas Unitarias y de Integración para Sitecrack.
+Suite de Pruebas Unitarias y de Integración para Sitecrack (App Gráfica + API + Core).
 Valida el bajo acoplamiento (DIP), alta cohesión (SRP), endurecimiento AppSec
-(CWE-89, CWE-532) y formateadores visuales de accesibilidad.
+(CWE-89, CWE-532), simulador visual y formateadores de accesibilidad.
 """
 
 from __future__ import annotations
@@ -11,23 +11,28 @@ from typing import List
 from unittest.mock import MagicMock
 
 from src.api.api_server import (
+    SimulationRequest,
     clear_captured_flows,
     get_flow_detail,
     get_traffic_stats,
     health_check,
     ingest_flow,
     list_captured_flows,
+    seed_demo_flows,
+    serve_graphical_app,
+    simulate_custom_flow,
 )
 from src.api.database import SQLiteFlowRepository
 from src.core.proxy_core import MAX_PREVIEW_BYTES, SitecrackInterceptorAddon
 from src.core.security_analyzer import PassiveSecurityAnalyzer, sanitize_headers
-from src.domain.schemas import HttpFlowCreate
+from src.domain.schemas import HttpFlowCreate, HttpFlowRecord
 from src.ui.cli_app import (
     build_inspector_renderable,
     format_grade_badge,
     format_scheme_badge,
     format_status_badge,
 )
+from src.ui.gui_app import HEADER_EXPLANATIONS
 
 
 def test_security_analyzer_grades_and_secret_redaction() -> None:
@@ -71,53 +76,49 @@ def test_sqlite_repository_and_fastapi_controllers_integration(tmp_path: Path) -
     test_db = tmp_path / "test_flows.db"
     repo = SQLiteFlowRepository(db_path=test_db)
 
-    # 1. Health check
+    # 1. Health check & Graphical App HTML file check
     health = health_check()
     assert health["status"] == "online"
+    html_resp = serve_graphical_app()
+    assert Path(html_resp.path).exists()
 
-    # 2. Ingestar un flujo mediante controlador FastAPI con DI
-    analyzer = PassiveSecurityAnalyzer()
-    audit = analyzer.evaluate("https", {"Strict-Transport-Security": "max-age=31536000"})
-    payload = HttpFlowCreate(
-        method="POST",
-        scheme="https",
-        host="api.example.org",
-        path="/v1/login",
-        url="https://api.example.org/v1/login",
-        status_code=201,
-        content_type="application/json",
-        duration_ms=34.5,
-        request_size=128,
-        response_size=256,
-        request_headers={"Host": "api.example.org"},
-        response_headers={"Strict-Transport-Security": "max-age=31536000"},
-        request_preview='{"user":"demo"}',
-        response_preview='{"ok":true}',
-        security_audit=audit,
+    # 2. Seed de demostración y simulador interactivo de la App Gráfica
+    seeded = seed_demo_flows(repo=repo)
+    assert len(seeded) == 4
+
+    sim_record = simulate_custom_flow(
+        sim=SimulationRequest(
+            url="https://panel.empresa.es/pagos",
+            method="POST",
+            status_code=200,
+            preset="hardened",
+        ),
+        repo=repo,
     )
-
-    created = ingest_flow(payload=payload, repo=repo)
-    assert created.id == 1
-    assert created.host == "api.example.org"
+    assert sim_record.security_audit.grade == "A"
+    assert sim_record.host == "panel.empresa.es"
 
     # 3. Consultar lista filtrada, detalle individual y estadísticas
     flows = list_captured_flows(
-        limit=50, offset=0, method="POST", host="example.org", min_status=200, repo=repo
+        limit=50,
+        offset=0,
+        method="POST",
+        host="panel.empresa.es",
+        min_status=200,
+        repo=repo,
     )
     assert len(flows) == 1
-    assert flows[0].url == "https://api.example.org/v1/login"
+    assert flows[0].url == "https://panel.empresa.es/pagos"
 
-    detail = get_flow_detail(flow_id=1, repo=repo)
-    assert detail.status_code == 201
+    detail = get_flow_detail(flow_id=sim_record.id, repo=repo)
+    assert detail.status_code == 200
 
     stats = get_traffic_stats(repo=repo)
-    assert stats.total_flows == 1
-    assert stats.https_count == 1
-    assert stats.error_count == 0
+    assert stats.total_flows == 5
 
     # 4. Limpiar historial
     deleted = clear_captured_flows(repo=repo)
-    assert deleted["deleted"] == 1
+    assert deleted["deleted"] == 5
     assert get_traffic_stats(repo=repo).total_flows == 0
 
 
@@ -159,13 +160,10 @@ def test_interceptor_addon_decoupled_publisher_and_ram_bound() -> None:
     assert "TRUNCADO" in dto.response_preview
     assert len(dto.request_preview) < MAX_PREVIEW_BYTES + 120
 
-    # Verificar que el panel inspector Rich construye sin errores
-    record_mock = repo_record = dto.model_dump()
-    from src.domain.schemas import HttpFlowRecord
-
-    full_record = HttpFlowRecord(id=1, **record_mock)
+    full_record = HttpFlowRecord(id=1, **dto.model_dump())
     panel = build_inspector_renderable(full_record, high_contrast=True)
     assert panel is not None
+    assert "Strict-Transport-Security" in HEADER_EXPLANATIONS
 
 
 def test_accessible_visual_formatters() -> None:

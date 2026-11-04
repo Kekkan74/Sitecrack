@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="daylight" data-scale="normal">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sitecrack App — Inspector Gráfico HTTP/S y Auditor de Seguridad</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Barra Superior de la Aplicación -->
+    <header class="topbar" role="banner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">SC</div>
+        <div>
+          <h1 class="brand-title">Sitecrack App</h1>
+          <p class="brand-subtitle">Inspector visual de tráfico HTTP/S y diagnóstico pasivo de seguridad web</p>
+        </div>
+      </div>
+
+      <div class="toolbar-actions" role="toolbar" aria-label="Acciones principales">
+        <button id="btn-seed-demo" class="btn btn-primary" type="button">
+          ＋ Cargar tráfico de muestra
+        </button>
+        <button id="btn-open-simulator" class="btn" type="button">
+          ⚡ Simular petición
+        </button>
+        <button id="btn-refresh" class="btn" type="button">
+          ↻ Actualizar
+        </button>
+        <button id="btn-toggle-scale" class="btn" type="button" aria-pressed="false">
+          🔍 Letra grande
+        </button>
+        <button id="btn-toggle-theme" class="btn" type="button" aria-pressed="false">
+          ♿ Alto contraste
+        </button>
+        <button id="btn-clear" class="btn btn-danger" type="button">
+          🗑 Limpiar
+        </button>
+      </div>
+    </header>
+
+    <!-- Cinta de Métricas Explicadas -->
+    <section class="summary-strip" aria-label="Resumen de tráfico">
+      <div class="metric-tile">
+        <span class="metric-label">Peticiones capturadas</span>
+        <span class="metric-value" id="stat-total">0</span>
+      </div>
+      <div class="metric-tile">
+        <span class="metric-label">Conexiones cifradas (HTTPS)</span>
+        <span class="metric-value" id="stat-https">0</span>
+      </div>
+      <div class="metric-tile">
+        <span class="metric-label">Conexiones sin cifrar (HTTP)</span>
+        <span class="metric-value" id="stat-http">0</span>
+      </div>
+      <div class="metric-tile">
+        <span class="metric-label">Respuestas con alerta (Nota D/F)</span>
+        <span class="metric-value" id="stat-low-sec">0</span>
+      </div>
+      <div class="metric-tile">
+        <span class="metric-label">Tiempo medio de respuesta</span>
+        <span class="metric-value" id="stat-latency">0 ms</span>
+      </div>
+    </section>
+
+    <!-- Área de Trabajo Principal: Lista Izquierda + Inspector Derecho -->
+    <main class="workbench">
+      <!-- Panel Izquierdo: Tabla de Peticiones -->
+      <section class="pane-left" aria-label="Lista de peticiones interceptadas">
+        <div class="filter-controls">
+          <input
+            id="input-host-filter"
+            class="input-search"
+            type="search"
+            placeholder="Filtrar por dominio o ruta (ej. api, auth, portal)..."
+            aria-label="Filtrar peticiones por dominio"
+          />
+          <select id="select-method-filter" class="select-filter" aria-label="Filtrar por método HTTP">
+            <option value="">Todos los métodos</option>
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+        </div>
+
+        <div class="table-container">
+          <table class="flows-table" aria-label="Tráfico HTTP capturado">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Seguridad Red</th>
+                <th scope="col">Método</th>
+                <th scope="col">Dominio y Ruta</th>
+                <th scope="col">Respuesta</th>
+                <th scope="col">Tiempo</th>
+                <th scope="col">Nota Seguridad</th>
+              </tr>
+            </thead>
+            <tbody id="flows-tbody">
+              <!-- Filas inyectadas dinámicamente por app.js -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Panel Derecho: Explicación Visual Paso a Paso -->
+      <section class="pane-right" aria-label="Inspector detallado de la petición seleccionada">
+        <div class="inspector-header" id="inspector-header">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
+            <span id="detail-badges">Selecciona una petición de la lista izquierda</span>
+            <span class="mono-cell" id="detail-timestamp"></span>
+          </div>
+          <div class="inspector-url" id="detail-url">—</div>
+        </div>
+
+        <nav class="inspector-tabs" role="tablist" aria-label="Secciones del inspector">
+          <button class="tab-btn active" data-tab="security" role="tab" aria-selected="true">
+            🛡️ Diagnóstico de Seguridad
+          </button>
+          <button class="tab-btn" data-tab="headers" role="tab" aria-selected="false">
+            📋 Cabeceras (Headers)
+          </button>
+          <button class="tab-btn" data-tab="payload" role="tab" aria-selected="false">
+            📦 Datos Enviados y Recibidos
+          </button>
+        </nav>
+
+        <div class="inspector-body" id="inspector-content">
+          <!-- Contenido dinámico según pestaña activa -->
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal para Simular una Petición sin configurar navegador -->
+  <div id="simulator-modal" class="modal-backdrop" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title" style="font-size:1.1rem; font-weight:800;">
+        ⚡ Simular y Auditar una Petición Web
+      </h2>
+      <p style="font-size:0.86rem; color:var(--ink-secondary);">
+        Envía una petición de prueba al analizador de Sitecrack para comprobar cómo califica sus cabeceras de seguridad.
+      </p>
+
+      <div class="form-group">
+        <label for="sim-url">URL completa de la petición</label>
+        <input id="sim-url" class="input-search" type="text" value="https://mi-api.ejemplo.es/v1/clientes" />
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+        <div class="form-group">
+          <label for="sim-method">Método HTTP</label>
+          <select id="sim-method" class="select-filter">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="sim-status">Código de respuesta</label>
+          <select id="sim-status" class="select-filter">
+            <option value="200">200 OK (Correcto)</option>
+            <option value="201">201 Created</option>
+            <option value="401">401 Unauthorized</option>
+            <option value="403">403 Forbidden</option>
+            <option value="500">500 Server Error</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="sim-preset">Nivel de protección en cabeceras de respuesta</label>
+        <select id="sim-preset" class="select-filter">
+          <option value="hardened">✔ Servidor blindado (HSTS + CSP + Anti-Clickjacking)</option>
+          <option value="partial">⚠ Protección intermedia (Solo HSTS, sin CSP)</option>
+          <option value="vulnerable">✖ Servidor desprotegido (Sin cabeceras y revelando versión Apache)</option>
+        </select>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.6rem; margin-top:0.5rem;">
+        <button id="btn-close-modal" class="btn" type="button">Cancelar</button>
+        <button id="btn-submit-sim" class="btn btn-primary" type="button">Guardar y analizar petición</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
