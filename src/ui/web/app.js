@@ -1,6 +1,6 @@
 /* ==========================================================================
-   Sitecrack Graphical Application Controller (app.js)
-   Consume los endpoints REST de FastAPI con bajo acoplamiento.
+   Sitecrack Modern UI Controller (app.js)
+   Interfaz limpia, visual y fácil de entender para cualquier usuario.
    ========================================================================== */
 
 const state = {
@@ -11,20 +11,38 @@ const state = {
   methodFilter: "",
 };
 
-const HEADER_EXPLANATIONS = {
-  "Strict-Transport-Security":
-    "Obliga al navegador a conectarse siempre usando cifrado HTTPS, evitando que alguien intercepte la conexión en redes Wi-Fi públicas.",
-  "Content-Security-Policy":
-    "Controla desde qué orígenes se pueden ejecutar scripts en la página, bloqueando ataques de inyección de código (XSS).",
-  "X-Content-Type-Options":
-    "Impide que el navegador adivine el tipo de archivo por su cuenta (nosniff), evitando que un archivo de texto se ejecute como código.",
-  "X-Frame-Options":
-    "Evita que otra web maliciosa incruste esta página dentro de un recuadro invisible para engañar los clics del usuario (Clickjacking).",
-  "Referrer-Policy":
-    "Protege la privacidad evitando que la dirección completa de la página actual se filtre al pulsar enlaces hacia otros sitios.",
-  "Permissions-Policy":
-    "Bloquea el uso no autorizado de cámara, micrófono o geolocalización dentro de la aplicación web.",
-};
+const PROTECTIONS_GUIDE = [
+  {
+    header: "Strict-Transport-Security",
+    title: "Cifrado obligatorio (HSTS)",
+    desc: "Obliga a que la conexión viaje siempre cifrada para que nadie pueda espiar tus datos en redes Wi-Fi.",
+  },
+  {
+    header: "Content-Security-Policy",
+    title: "Escudo contra código malicioso (CSP)",
+    desc: "Bloquea la ejecución de scripts intrusos inyectados por atacantes en la página.",
+  },
+  {
+    header: "X-Frame-Options",
+    title: "Bloqueo de trampas visuales",
+    desc: "Evita que otra página falsa incruste esta web en un marco invisible para engañar tus clics.",
+  },
+  {
+    header: "X-Content-Type-Options",
+    title: "Verificación de archivos",
+    desc: "Impide que el navegador ejecute archivos de texto o imágenes como si fueran programas.",
+  },
+  {
+    header: "Referrer-Policy",
+    title: "Privacidad de navegación",
+    desc: "Evita filtrar la dirección privada que estabas visitando cuando haces clic en un enlace externo.",
+  },
+  {
+    header: "Permissions-Policy",
+    title: "Control de cámara y micrófono",
+    desc: "Restringe el acceso a sensores del dispositivo como geolocalización, cámara o micrófono.",
+  },
+];
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -34,40 +52,35 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function renderStatusBadge(statusCode) {
-  if (statusCode >= 200 && statusCode < 300) {
-    return `<span class="badge badge-ok">✔ ${statusCode} Correcto</span>`;
-  }
-  if (statusCode >= 300 && statusCode < 400) {
-    return `<span class="badge badge-info">↪ ${statusCode} Redirección</span>`;
-  }
-  if (statusCode >= 400 && statusCode < 500) {
-    return `<span class="badge badge-warn">⚠ ${statusCode} Aviso Cliente</span>`;
-  }
-  return `<span class="badge badge-danger">✖ ${statusCode} Error Servidor</span>`;
+function getToneByGrade(grade) {
+  if (grade === "A" || grade === "B") return "safe";
+  if (grade === "C" || grade === "D") return "warn";
+  return "danger";
 }
 
-function renderSchemeBadge(scheme) {
-  if (String(scheme).toLowerCase() === "https") {
-    return `<span class="badge badge-ok" title="Tráfico protegido con TLS">🔒 HTTPS</span>`;
-  }
-  return `<span class="badge badge-danger" title="Tráfico en texto claro sin cifrar">🔓 HTTP</span>`;
+function getToneByStatus(statusCode) {
+  if (statusCode >= 200 && statusCode < 400) return "safe";
+  if (statusCode >= 400 && statusCode < 500) return "warn";
+  return "danger";
 }
 
-function renderGradeBadge(grade, score) {
-  const map = {
-    A: { cls: "badge-ok", icon: "★", label: "Excelente" },
-    B: { cls: "badge-info", icon: "◆", label: "Buena" },
-    C: { cls: "badge-warn", icon: "▲", label: "Mejorable" },
-    D: { cls: "badge-warn", icon: "▼", label: "Débil" },
-    F: { cls: "badge-danger", icon: "✖", label: "Riesgo Alto" },
-  };
-  const info = map[grade] || map.C;
-  return `<span class="badge ${info.cls}">${info.icon} Nota ${escapeHtml(grade)} (${score}/100 · ${info.label})</span>`;
+function getPlainVerdict(flow) {
+  const grade = flow.security_audit.grade;
+  const missingCount = flow.security_audit.missing_headers.length;
+  if (flow.scheme !== "https") {
+    return "Conexión sin cifrar (HTTP): los datos viajan en texto abierto.";
+  }
+  if (grade === "A") {
+    return "Conexión bien protegida: cuenta con cifrado HTTPS y escudos activos.";
+  }
+  if (grade === "B" || grade === "C") {
+    return `Protección parcial: conexión cifrada, pero faltan ${missingCount} escudos recomendados.`;
+  }
+  return `Atención: esta respuesta tiene ${missingCount} carencias importantes de seguridad.`;
 }
 
 async function fetchTelemetry() {
-  const params = new URLSearchParams({ limit: "150" });
+  const params = new URLSearchParams({ limit: "100" });
   if (state.hostFilter) params.set("host", state.hostFilter);
   if (state.methodFilter) params.set("method", state.methodFilter);
 
@@ -79,12 +92,16 @@ async function fetchTelemetry() {
   state.flows = await flowsResp.json();
   const stats = await statsResp.json();
 
-  updateStatsStrip(stats);
-  renderFlowsTable();
+  document.getElementById("stat-total").textContent = stats.total_flows;
+  document.getElementById("stat-https").textContent = stats.https_count;
+  document.getElementById("stat-low-sec").textContent = stats.low_security_count;
+  document.getElementById("stat-latency").textContent = `${stats.avg_duration_ms} ms`;
+
+  renderFlowList();
 
   if (state.flows.length > 0) {
-    const stillExists = state.flows.some((f) => f.id === state.selectedFlowId);
-    if (!stillExists) {
+    const exists = state.flows.some((f) => f.id === state.selectedFlowId);
+    if (!exists) {
       state.selectedFlowId = state.flows[0].id;
     }
     renderInspector();
@@ -94,76 +111,64 @@ async function fetchTelemetry() {
   }
 }
 
-function updateStatsStrip(stats) {
-  document.getElementById("stat-total").textContent = stats.total_flows;
-  document.getElementById("stat-https").textContent = stats.https_count;
-  document.getElementById("stat-http").textContent = stats.http_count;
-  document.getElementById("stat-low-sec").textContent = stats.low_security_count;
-  document.getElementById("stat-latency").textContent = `${stats.avg_duration_ms} ms`;
-}
-
-function renderFlowsTable() {
-  const tbody = document.getElementById("flows-tbody");
+function renderFlowList() {
+  const container = document.getElementById("flow-list");
   if (state.flows.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="7" class="empty-state">
-          <p style="font-weight:700; font-size:1rem; margin-bottom:0.4rem;">
-            Aún no hay peticiones en la lista
-          </p>
-          <p>
-            Pulsa el botón <strong>"＋ Cargar tráfico de muestra"</strong> arriba a la derecha para explorar ejemplos reales al instante, o usa <strong>"⚡ Simular petición"</strong>.
-          </p>
-        </td>
-      </tr>
+    container.innerHTML = `
+      <div class="empty-placeholder">
+        <p style="font-weight:600; color:var(--text-main); margin-bottom:0.35rem;">Lista vacía</p>
+        <p style="font-size:0.84rem;">Pulsa <strong>"Cargar ejemplos"</strong> o <strong>"＋ Nueva prueba"</strong> arriba a la derecha.</p>
+      </div>
     `;
     return;
   }
 
-  tbody.innerHTML = state.flows
+  container.innerHTML = state.flows
     .map((flow) => {
-      const isSelected = flow.id === state.selectedFlowId ? "selected" : "";
+      const selectedCls = flow.id === state.selectedFlowId ? "selected" : "";
+      const gradeTone = getToneByGrade(flow.security_audit.grade);
+      const lockIcon = flow.scheme === "https" ? "🔒" : "🔓";
       return `
-        <tr class="flow-row ${isSelected}" data-flow-id="${flow.id}" tabindex="0">
-          <td class="mono-cell">#${flow.id}</td>
-          <td>${renderSchemeBadge(flow.scheme)}</td>
-          <td class="mono-cell"><strong>${escapeHtml(flow.method)}</strong></td>
-          <td class="host-cell">
-            <span class="host-primary">${escapeHtml(flow.host)}</span>
-            <span class="path-secondary">${escapeHtml(flow.path)}</span>
-          </td>
-          <td>${renderStatusBadge(flow.status_code)}</td>
-          <td class="mono-cell">${flow.duration_ms.toFixed(1)} ms</td>
-          <td>${renderGradeBadge(flow.security_audit.grade, flow.security_audit.score)}</td>
-        </tr>
+        <div class="flow-item ${selectedCls}" data-flow-id="${flow.id}" role="listitem" tabindex="0">
+          <div class="flow-item-left">
+            <div class="flow-top-line">
+              <span class="method-tag">${escapeHtml(flow.method)}</span>
+              <span class="host-text">${lockIcon} ${escapeHtml(flow.host)}</span>
+            </div>
+            <div class="path-text">${escapeHtml(flow.path)}</div>
+          </div>
+
+          <div class="flow-item-right">
+            <span class="pill pill-${gradeTone}">
+              Nota ${escapeHtml(flow.security_audit.grade)} · ${flow.security_audit.score}
+            </span>
+            <span class="latency-label">HTTP ${flow.status_code} · ${flow.duration_ms.toFixed(0)} ms</span>
+          </div>
+        </div>
       `;
     })
     .join("");
 
-  tbody.querySelectorAll(".flow-row").forEach((row) => {
-    row.addEventListener("click", () => {
-      state.selectedFlowId = Number(row.dataset.flowId);
-      renderFlowsTable();
+  container.querySelectorAll(".flow-item").forEach((el) => {
+    const selectThis = () => {
+      state.selectedFlowId = Number(el.dataset.flowId);
+      renderFlowList();
       renderInspector();
-    });
-    row.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter" || ev.key === " ") {
-        ev.preventDefault();
-        state.selectedFlowId = Number(row.dataset.flowId);
-        renderFlowsTable();
-        renderInspector();
+    };
+    el.addEventListener("click", selectThis);
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        selectThis();
       }
     });
   });
 }
 
 function renderEmptyInspector() {
-  document.getElementById("detail-badges").textContent = "Ninguna petición seleccionada";
-  document.getElementById("detail-timestamp").textContent = "";
-  document.getElementById("detail-url").textContent = "—";
-  document.getElementById("inspector-content").innerHTML = `
-    <div class="card empty-state">
-      Selecciona cualquier fila en la tabla de la izquierda o carga el tráfico de muestra para ver su diagnóstico visual de seguridad.
+  document.getElementById("inspector-scroll").innerHTML = `
+    <div class="empty-placeholder">
+      Selecciona una petición a la izquierda para ver su diagnóstico visual de seguridad.
     </div>
   `;
 }
@@ -175,135 +180,126 @@ function renderInspector() {
     return;
   }
 
-  document.getElementById("detail-badges").innerHTML = `
-    ${renderSchemeBadge(flow.scheme)}
-    <span class="badge badge-info">${escapeHtml(flow.method)}</span>
-    ${renderStatusBadge(flow.status_code)}
-    ${renderGradeBadge(flow.security_audit.grade, flow.security_audit.score)}
-  `;
-  document.getElementById("detail-timestamp").textContent = flow.timestamp;
-  document.getElementById("detail-url").textContent = flow.url;
+  const audit = flow.security_audit;
+  const gradeTone = getToneByGrade(audit.grade);
+  const statusTone = getToneByStatus(flow.status_code);
+  const verdict = getPlainVerdict(flow);
 
-  const container = document.getElementById("inspector-content");
+  let tabBodyHtml = "";
 
   if (state.activeTab === "security") {
-    const audit = flow.security_audit;
-    const findingsHtml =
-      audit.findings.length === 0
-        ? `<div class="finding-item" style="border-left-color:var(--ok-border); background:var(--ok-bg); color:var(--ok-ink);">
-             <div class="finding-title">✔ Excelente postura defensiva</div>
-             <div class="finding-desc">Esta respuesta incluye cifrado HTTPS y todas las cabeceras de seguridad recomendadas por OWASP.</div>
-           </div>`
-        : audit.findings
-            .map(
-              (f) => `
-              <div class="finding-item sev-${escapeHtml(f.severity)}">
-                <div class="finding-title">
-                  ${f.severity === "HIGH" ? "✖ Riesgo Alto" : f.severity === "MEDIUM" ? "⚠ Aviso Medio" : "ℹ Información"}
-                  — ${escapeHtml(f.header)}
-                </div>
-                <div class="finding-desc">${escapeHtml(f.description)}</div>
-              </div>
-            `
-            )
-            .join("");
-
-    const checklistHtml = Object.entries(HEADER_EXPLANATIONS)
-      .map(([headerName, explanation]) => {
-        const isMissing = audit.missing_headers.includes(headerName);
-        const badge = isMissing
-          ? `<span class="badge badge-danger">✖ Falta</span>`
-          : `<span class="badge badge-ok">✔ Presente</span>`;
-        return `
-          <div style="padding:0.65rem 0; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
-            <div>
-              <div style="font-weight:700; font-family:var(--font-mono); font-size:0.86rem;">${escapeHtml(headerName)}</div>
-              <div style="font-size:0.83rem; color:var(--ink-secondary); margin-top:0.15rem;">${escapeHtml(explanation)}</div>
+    const cardsHtml = PROTECTIONS_GUIDE.map((item) => {
+      const isMissing = audit.missing_headers.includes(item.header);
+      const badgeHtml = isMissing
+        ? `<span class="pill pill-danger">✖ Falta</span>`
+        : `<span class="pill pill-safe">✔ Activo</span>`;
+      return `
+        <div class="protection-card">
+          <div>
+            <div class="protection-header">
+              <span class="protection-name">${escapeHtml(item.title)}</span>
+              ${badgeHtml}
             </div>
-            <div>${badge}</div>
+            <p class="protection-desc" style="margin-top:0.4rem;">${escapeHtml(item.desc)}</p>
           </div>
-        `;
-      })
-      .join("");
-
-    container.innerHTML = `
-      <div class="card">
-        <div class="card-title">
-          <span>Hallazgos detectados en esta respuesta</span>
-          <span>Puntuación: ${audit.score} / 100</span>
+          <div style="font-family:var(--font-mono); font-size:0.74rem; color:var(--text-muted);">
+            Cabecera: ${escapeHtml(item.header)}
+          </div>
         </div>
-        <div class="finding-list">${findingsHtml}</div>
-      </div>
+      `;
+    }).join("");
 
-      <div class="card">
-        <div class="card-title">
-          <span>Lista de comprobación de protecciones web (Guía clara)</span>
-        </div>
-        <div>${checklistHtml}</div>
+    tabBodyHtml = `
+      <div class="protection-grid">
+        ${cardsHtml}
       </div>
     `;
   } else if (state.activeTab === "headers") {
-    const reqRows = Object.entries(flow.request_headers)
+    const reqList = Object.entries(flow.request_headers)
       .map(
         ([k, v]) =>
-          `<div class="kv-key">${escapeHtml(k)}</div><div class="kv-val">${escapeHtml(v)}</div>`
+          `<div class="kv-row"><span class="kv-key">${escapeHtml(k)}</span><span class="kv-val">${escapeHtml(v)}</span></div>`
       )
       .join("");
-    const respRows = Object.entries(flow.response_headers)
+    const respList = Object.entries(flow.response_headers)
       .map(
         ([k, v]) =>
-          `<div class="kv-key">${escapeHtml(k)}</div><div class="kv-val">${escapeHtml(v)}</div>`
+          `<div class="kv-row"><span class="kv-key">${escapeHtml(k)}</span><span class="kv-val">${escapeHtml(v)}</span></div>`
       )
       .join("");
 
-    container.innerHTML = `
-      <div class="card">
-        <div class="card-title">
-          <span>📤 Cabeceras enviadas por el cliente (Credenciales ocultadas automáticamente)</span>
-        </div>
-        <div class="kv-grid">${reqRows || "<div>Sin cabeceras</div>"}</div>
+    tabBodyHtml = `
+      <div class="section-box">
+        <div class="section-title">Cabeceras enviadas por el navegador (Tokens ocultados por seguridad)</div>
+        <div class="kv-list">${reqList || "Ninguna"}</div>
       </div>
-      <div class="card">
-        <div class="card-title">
-          <span>📥 Cabeceras devueltas por el servidor</span>
-        </div>
-        <div class="kv-grid">${respRows || "<div>Sin cabeceras</div>"}</div>
+      <div class="section-box">
+        <div class="section-title">Cabeceras respondidas por el servidor</div>
+        <div class="kv-list">${respList || "Ninguna"}</div>
       </div>
     `;
   } else {
-    container.innerHTML = `
-      <div class="card">
-        <div class="card-title">
-          <span>📤 Cuerpo enviado en la petición (${flow.request_size} bytes)</span>
-        </div>
-        <pre class="code-block">${escapeHtml(flow.request_preview || "(Sin datos enviados en el cuerpo de la petición)")}</pre>
+    tabBodyHtml = `
+      <div class="section-box">
+        <div class="section-title">Datos enviados en la petición (${flow.request_size} bytes)</div>
+        <pre class="code-viewer">${escapeHtml(flow.request_preview || "Esta petición no envió datos adjuntos.")}</pre>
       </div>
-      <div class="card">
-        <div class="card-title">
-          <span>📥 Cuerpo recibido en la respuesta (${flow.response_size} bytes · ${escapeHtml(flow.content_type)})</span>
-        </div>
-        <pre class="code-block">${escapeHtml(flow.response_preview || "(Respuesta sin contenido textual)")}</pre>
+      <div class="section-box">
+        <div class="section-title">Respuesta recibida del servidor (${flow.response_size} bytes · ${escapeHtml(flow.content_type)})</div>
+        <pre class="code-viewer">${escapeHtml(flow.response_preview || "Sin vista previa de texto.")}</pre>
       </div>
     `;
   }
-}
 
-document.addEventListener("DOMContentLoaded", () => {
-  // Pestañas del inspector
-  document.querySelectorAll(".tab-btn").forEach((btn) => {
+  const container = document.getElementById("inspector-scroll");
+  container.innerHTML = `
+    <!-- Tarjeta Resumen Hero -->
+    <div class="score-hero">
+      <div class="score-hero-left">
+        <div class="grade-circle ${gradeTone}">
+          ${escapeHtml(audit.grade)}
+          <span>${audit.score}/100</span>
+        </div>
+        <div>
+          <div class="hero-verdict">${escapeHtml(verdict)}</div>
+          <div class="hero-url">${escapeHtml(flow.method)} ${escapeHtml(flow.url)}</div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:0.5rem; align-items:center;">
+        <span class="pill pill-${statusTone}">Respuesta ${flow.status_code}</span>
+        <span class="pill" style="background:var(--bg-surface); border-color:var(--border-color);">
+          ${flow.duration_ms.toFixed(1)} ms
+        </span>
+      </div>
+    </div>
+
+    <!-- Pestañas Limpias -->
+    <div class="segmented-tabs" role="tablist">
+      <button class="seg-btn ${state.activeTab === "security" ? "active" : ""}" data-tab="security" type="button">
+        Escudos de Seguridad (6)
+      </button>
+      <button class="seg-btn ${state.activeTab === "headers" ? "active" : ""}" data-tab="headers" type="button">
+        Cabeceras Técnicas
+      </button>
+      <button class="seg-btn ${state.activeTab === "payload" ? "active" : ""}" data-tab="payload" type="button">
+        Contenido / Datos
+      </button>
+    </div>
+
+    <!-- Contenido de la Pestaña -->
+    ${tabBodyHtml}
+  `;
+
+  container.querySelectorAll(".seg-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".tab-btn").forEach((b) => {
-        b.classList.remove("active");
-        b.setAttribute("aria-selected", "false");
-      });
-      btn.classList.add("active");
-      btn.setAttribute("aria-selected", "true");
       state.activeTab = btn.dataset.tab;
       renderInspector();
     });
   });
+}
 
-  // Filtros en vivo
+document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("input-host-filter").addEventListener("input", (e) => {
     state.hostFilter = e.target.value.trim();
     fetchTelemetry();
@@ -314,42 +310,28 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchTelemetry();
   });
 
-  // Botón Cargar Tráfico de Muestra
   document.getElementById("btn-seed-demo").addEventListener("click", async () => {
     await fetch("/api/v1/demo-seed", { method: "POST" });
     await fetchTelemetry();
   });
 
-  // Botón Actualizar
-  document.getElementById("btn-refresh").addEventListener("click", () => {
-    fetchTelemetry();
-  });
-
-  // Botón Limpiar
   document.getElementById("btn-clear").addEventListener("click", async () => {
     await fetch("/api/v1/flows", { method: "DELETE" });
     await fetchTelemetry();
   });
 
-  // Conmutador Alto Contraste
-  const themeBtn = document.getElementById("btn-toggle-theme");
-  themeBtn.addEventListener("click", () => {
+  document.getElementById("btn-toggle-theme").addEventListener("click", () => {
     const html = document.documentElement;
-    const isHigh = html.getAttribute("data-theme") === "high-contrast";
-    html.setAttribute("data-theme", isHigh ? "daylight" : "high-contrast");
-    themeBtn.setAttribute("aria-pressed", String(!isHigh));
+    const isDark = html.getAttribute("data-theme") === "dark";
+    html.setAttribute("data-theme", isDark ? "light" : "dark");
   });
 
-  // Conmutador Tamaño de Letra Grande
-  const scaleBtn = document.getElementById("btn-toggle-scale");
-  scaleBtn.addEventListener("click", () => {
+  document.getElementById("btn-toggle-scale").addEventListener("click", () => {
     const html = document.documentElement;
     const isLarge = html.getAttribute("data-scale") === "large";
     html.setAttribute("data-scale", isLarge ? "normal" : "large");
-    scaleBtn.setAttribute("aria-pressed", String(!isLarge));
   });
 
-  // Modal Simulador
   const modal = document.getElementById("simulator-modal");
   document.getElementById("btn-open-simulator").addEventListener("click", () => {
     modal.hidden = false;
@@ -377,7 +359,6 @@ document.addEventListener("DOMContentLoaded", () => {
     await fetchTelemetry();
   });
 
-  // Carga inicial
   fetchTelemetry();
   setInterval(fetchTelemetry, 4000);
 });

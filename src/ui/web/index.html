@@ -1,83 +1,63 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="daylight" data-scale="normal">
+<html lang="es" data-theme="light" data-scale="normal">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sitecrack App — Inspector Gráfico HTTP/S y Auditor de Seguridad</title>
+  <title>Sitecrack — Inspector de Seguridad Web</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <!-- Barra Superior de la Aplicación -->
-    <header class="topbar" role="banner">
-      <div class="brand">
-        <div class="brand-mark" aria-hidden="true">SC</div>
+  <div class="app-layout">
+    <!-- Barra Superior Limpia con Métricas Integradas -->
+    <header class="navbar" role="banner">
+      <div class="brand-group">
+        <div class="brand-logo" aria-hidden="true">SC</div>
         <div>
-          <h1 class="brand-title">Sitecrack App</h1>
-          <p class="brand-subtitle">Inspector visual de tráfico HTTP/S y diagnóstico pasivo de seguridad web</p>
+          <h1 class="brand-name">Sitecrack</h1>
+          <p class="brand-tagline">Inspector sencillo de peticiones y seguridad web</p>
         </div>
       </div>
 
-      <div class="toolbar-actions" role="toolbar" aria-label="Acciones principales">
-        <button id="btn-seed-demo" class="btn btn-primary" type="button">
-          ＋ Cargar tráfico de muestra
+      <div class="stats-pills" aria-label="Resumen de tráfico">
+        <span class="stat-pill">Total <strong id="stat-total">0</strong></span>
+        <span class="stat-pill">Seguras (HTTPS) <strong id="stat-https">0</strong></span>
+        <span class="stat-pill">Con avisos <strong id="stat-low-sec">0</strong></span>
+        <span class="stat-pill">Media <strong id="stat-latency">0 ms</strong></span>
+      </div>
+
+      <div class="nav-actions">
+        <button id="btn-open-simulator" class="btn btn-primary" type="button">
+          ＋ Nueva prueba
         </button>
-        <button id="btn-open-simulator" class="btn" type="button">
-          ⚡ Simular petición
+        <button id="btn-seed-demo" class="btn" type="button">
+          Cargar ejemplos
         </button>
-        <button id="btn-refresh" class="btn" type="button">
-          ↻ Actualizar
+        <button id="btn-toggle-scale" class="btn btn-ghost" type="button" title="Cambiar tamaño de letra">
+          A+
         </button>
-        <button id="btn-toggle-scale" class="btn" type="button" aria-pressed="false">
-          🔍 Letra grande
+        <button id="btn-toggle-theme" class="btn btn-ghost" type="button" title="Alternar modo claro / oscuro">
+          ☾ Tema
         </button>
-        <button id="btn-toggle-theme" class="btn" type="button" aria-pressed="false">
-          ♿ Alto contraste
-        </button>
-        <button id="btn-clear" class="btn btn-danger" type="button">
-          🗑 Limpiar
+        <button id="btn-clear" class="btn btn-ghost" type="button" title="Vaciar lista">
+          Vaciar
         </button>
       </div>
     </header>
 
-    <!-- Cinta de Métricas Explicadas -->
-    <section class="summary-strip" aria-label="Resumen de tráfico">
-      <div class="metric-tile">
-        <span class="metric-label">Peticiones capturadas</span>
-        <span class="metric-value" id="stat-total">0</span>
-      </div>
-      <div class="metric-tile">
-        <span class="metric-label">Conexiones cifradas (HTTPS)</span>
-        <span class="metric-value" id="stat-https">0</span>
-      </div>
-      <div class="metric-tile">
-        <span class="metric-label">Conexiones sin cifrar (HTTP)</span>
-        <span class="metric-value" id="stat-http">0</span>
-      </div>
-      <div class="metric-tile">
-        <span class="metric-label">Respuestas con alerta (Nota D/F)</span>
-        <span class="metric-value" id="stat-low-sec">0</span>
-      </div>
-      <div class="metric-tile">
-        <span class="metric-label">Tiempo medio de respuesta</span>
-        <span class="metric-value" id="stat-latency">0 ms</span>
-      </div>
-    </section>
-
-    <!-- Área de Trabajo Principal: Lista Izquierda + Inspector Derecho -->
-    <main class="workbench">
-      <!-- Panel Izquierdo: Tabla de Peticiones -->
-      <section class="pane-left" aria-label="Lista de peticiones interceptadas">
-        <div class="filter-controls">
+    <!-- Espacio Principal en 2 Columnas -->
+    <main class="main-grid">
+      <!-- Columna Izquierda: Lista Simplificada de Peticiones -->
+      <section class="panel" aria-label="Lista de peticiones">
+        <div class="search-bar">
           <input
             id="input-host-filter"
-            class="input-search"
+            class="search-input"
             type="search"
-            placeholder="Filtrar por dominio o ruta (ej. api, auth, portal)..."
-            aria-label="Filtrar peticiones por dominio"
+            placeholder="Buscar web o ruta..."
+            aria-label="Buscar web o ruta"
           />
-          <select id="select-method-filter" class="select-filter" aria-label="Filtrar por método HTTP">
-            <option value="">Todos los métodos</option>
+          <select id="select-method-filter" class="method-select" aria-label="Método">
+            <option value="">Todos</option>
             <option value="GET">GET</option>
             <option value="POST">POST</option>
             <option value="PUT">PUT</option>
@@ -85,104 +65,65 @@
           </select>
         </div>
 
-        <div class="table-container">
-          <table class="flows-table" aria-label="Tráfico HTTP capturado">
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">Seguridad Red</th>
-                <th scope="col">Método</th>
-                <th scope="col">Dominio y Ruta</th>
-                <th scope="col">Respuesta</th>
-                <th scope="col">Tiempo</th>
-                <th scope="col">Nota Seguridad</th>
-              </tr>
-            </thead>
-            <tbody id="flows-tbody">
-              <!-- Filas inyectadas dinámicamente por app.js -->
-            </tbody>
-          </table>
+        <div id="flow-list" class="flow-list" role="list">
+          <!-- Tarjetas de peticiones inyectadas por app.js -->
         </div>
       </section>
 
-      <!-- Panel Derecho: Explicación Visual Paso a Paso -->
-      <section class="pane-right" aria-label="Inspector detallado de la petición seleccionada">
-        <div class="inspector-header" id="inspector-header">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem;">
-            <span id="detail-badges">Selecciona una petición de la lista izquierda</span>
-            <span class="mono-cell" id="detail-timestamp"></span>
-          </div>
-          <div class="inspector-url" id="detail-url">—</div>
-        </div>
-
-        <nav class="inspector-tabs" role="tablist" aria-label="Secciones del inspector">
-          <button class="tab-btn active" data-tab="security" role="tab" aria-selected="true">
-            🛡️ Diagnóstico de Seguridad
-          </button>
-          <button class="tab-btn" data-tab="headers" role="tab" aria-selected="false">
-            📋 Cabeceras (Headers)
-          </button>
-          <button class="tab-btn" data-tab="payload" role="tab" aria-selected="false">
-            📦 Datos Enviados y Recibidos
-          </button>
-        </nav>
-
-        <div class="inspector-body" id="inspector-content">
-          <!-- Contenido dinámico según pestaña activa -->
+      <!-- Columna Derecha: Diagnóstico Visual y Claro -->
+      <section class="panel" aria-label="Detalle de la petición">
+        <div id="inspector-scroll" class="inspector-scroll">
+          <!-- Contenido del inspector inyectado por app.js -->
         </div>
       </section>
     </main>
   </div>
 
-  <!-- Modal para Simular una Petición sin configurar navegador -->
+  <!-- Ventana Modal Simple para Crear una Prueba -->
   <div id="simulator-modal" class="modal-backdrop" hidden>
-    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <h2 id="modal-title" style="font-size:1.1rem; font-weight:800;">
-        ⚡ Simular y Auditar una Petición Web
-      </h2>
-      <p style="font-size:0.86rem; color:var(--ink-secondary);">
-        Envía una petición de prueba al analizador de Sitecrack para comprobar cómo califica sus cabeceras de seguridad.
-      </p>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div>
+        <h2 id="modal-title" style="font-size:1.05rem; font-weight:700;">Probar una dirección web</h2>
+        <p style="font-size:0.83rem; color:var(--text-muted); margin-top:0.2rem;">
+          Simula una petición para ver qué nota de seguridad recibe.
+        </p>
+      </div>
 
-      <div class="form-group">
-        <label for="sim-url">URL completa de la petición</label>
-        <input id="sim-url" class="input-search" type="text" value="https://mi-api.ejemplo.es/v1/clientes" />
+      <div class="field">
+        <label for="sim-url">Dirección (URL)</label>
+        <input id="sim-url" class="search-input" type="text" value="https://mi-tienda.ejemplo.es/pagos" />
       </div>
 
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-        <div class="form-group">
-          <label for="sim-method">Método HTTP</label>
-          <select id="sim-method" class="select-filter">
-            <option value="GET">GET</option>
-            <option value="POST">POST</option>
-            <option value="PUT">PUT</option>
-            <option value="DELETE">DELETE</option>
+        <div class="field">
+          <label for="sim-method">Tipo de petición</label>
+          <select id="sim-method" class="method-select">
+            <option value="GET">GET (Consultar)</option>
+            <option value="POST">POST (Enviar datos)</option>
           </select>
         </div>
-        <div class="form-group">
-          <label for="sim-status">Código de respuesta</label>
-          <select id="sim-status" class="select-filter">
-            <option value="200">200 OK (Correcto)</option>
-            <option value="201">201 Created</option>
-            <option value="401">401 Unauthorized</option>
-            <option value="403">403 Forbidden</option>
-            <option value="500">500 Server Error</option>
+        <div class="field">
+          <label for="sim-status">Respuesta del servidor</label>
+          <select id="sim-status" class="method-select">
+            <option value="200">200 (Correcta)</option>
+            <option value="403">403 (Acceso denegado)</option>
+            <option value="500">500 (Fallo del servidor)</option>
           </select>
         </div>
       </div>
 
-      <div class="form-group">
-        <label for="sim-preset">Nivel de protección en cabeceras de respuesta</label>
-        <select id="sim-preset" class="select-filter">
-          <option value="hardened">✔ Servidor blindado (HSTS + CSP + Anti-Clickjacking)</option>
-          <option value="partial">⚠ Protección intermedia (Solo HSTS, sin CSP)</option>
-          <option value="vulnerable">✖ Servidor desprotegido (Sin cabeceras y revelando versión Apache)</option>
+      <div class="field">
+        <label for="sim-preset">Nivel de seguridad simulado</label>
+        <select id="sim-preset" class="method-select">
+          <option value="hardened">Protección alta (Recomendada)</option>
+          <option value="partial">Protección media (Faltan escudos)</option>
+          <option value="vulnerable">Sin protección (Peligrosa)</option>
         </select>
       </div>
 
-      <div style="display:flex; justify-content:flex-end; gap:0.6rem; margin-top:0.5rem;">
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.5rem;">
         <button id="btn-close-modal" class="btn" type="button">Cancelar</button>
-        <button id="btn-submit-sim" class="btn btn-primary" type="button">Guardar y analizar petición</button>
+        <button id="btn-submit-sim" class="btn btn-primary" type="button">Analizar petición</button>
       </div>
     </div>
   </div>
