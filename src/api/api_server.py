@@ -24,8 +24,15 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.api.database import FlowRepositoryProtocol, SQLiteFlowRepository
+from src.core.repeater_service import RepeaterService
 from src.core.security_analyzer import PassiveSecurityAnalyzer, sanitize_headers
-from src.domain.schemas import HttpFlowCreate, HttpFlowRecord, TrafficStats
+from src.domain.schemas import (
+    HttpFlowCreate,
+    HttpFlowRecord,
+    RepeatFlowRequest,
+    RepeatFlowResponse,
+    TrafficStats,
+)
 from src.ui.api_client import DemoTelemetryClient
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -57,10 +64,10 @@ def get_repository() -> FlowRepositoryProtocol:
 app = FastAPI(
     title="Sitecrack Graphical App & Telemetry API",
     description=(
-        "Aplicación gráfica y backend RESTful ligero de inspección pasiva de tráfico "
+        "Aplicación gráfica, Repetidor en vivo y backend RESTful ligero de inspección "
         "HTTP/S para la suite de auditoría web Sitecrack."
     ),
-    version="2.0.0",
+    version="2.1.0",
 )
 
 if WEB_UI_DIR.exists():
@@ -76,7 +83,7 @@ def serve_graphical_app() -> FileResponse:
 @app.get("/health", tags=["System"])
 def health_check() -> dict[str, str]:
     """Verifica disponibilidad operativa del servicio Backend."""
-    return {"status": "online", "service": "sitecrack-app", "version": "2.0.0"}
+    return {"status": "online", "service": "sitecrack-app", "version": "2.1.0"}
 
 
 @app.post(
@@ -97,6 +104,24 @@ def ingest_flow(
 ) -> HttpFlowRecord:
     """Recibe y persiste un flujo HTTP/S interceptado desde `proxy_core.py`."""
     return repo.save_flow(payload)
+
+
+@app.post(
+    "/api/v1/repeat",
+    response_model=RepeatFlowResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Repeater"],
+)
+def repeat_and_audit_flow(
+    payload: RepeatFlowRequest,
+    repo: FlowRepositoryProtocol = Depends(get_repository),
+) -> RepeatFlowResponse:
+    """
+    Modifica, reenvía/simula una petición desde el Repetidor y devuelve la
+    comparativa Antes vs. Después junto con el nuevo flujo almacenado.
+    """
+    service = RepeaterService(repo=repo)
+    return service.execute_repeat(payload)
 
 
 @app.post(
@@ -163,7 +188,7 @@ def simulate_custom_flow(
     req_headers = sanitize_headers(
         {
             "Host": host,
-            "User-Agent": "Sitecrack-App-Simulator/2.0",
+            "User-Agent": "Sitecrack-App-Simulator/2.1",
             "Accept": "application/json",
             "Authorization": "Bearer token_simulado_secreto_999",
         }

@@ -1,6 +1,6 @@
 /* ==========================================================================
    Sitecrack Modern Glass UI Controller (app.js)
-   Banners en estilo cristal esmerilado y avisos coloreados de alto impacto.
+   Incluye Banners Glass, Avisos a Todo Color y Repetidor en Vivo (Antes/Después).
    ========================================================================== */
 
 const state = {
@@ -9,6 +9,7 @@ const state = {
   activeTab: "security",
   hostFilter: "",
   methodFilter: "",
+  lastComparison: null,
 };
 
 const PROTECTIONS_GUIDE = [
@@ -43,6 +44,15 @@ const PROTECTIONS_GUIDE = [
     desc: "Restringe el acceso a sensores del dispositivo como geolocalización, cámara o micrófono.",
   },
 ];
+
+const QUICK_SHIELD_VALUES = {
+  "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+  "Content-Security-Policy": "default-src 'self'",
+  "X-Frame-Options": "DENY",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "geolocation=(), microphone=()",
+};
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -128,7 +138,8 @@ function renderFlowList() {
       const selectedCls = flow.id === state.selectedFlowId ? "selected" : "";
       const gradeTone = getToneByGrade(flow.security_audit.grade);
       const lockIcon = flow.scheme === "https" ? "🔒" : "🔓";
-      const pillIcon = gradeTone === "safe" ? "✔" : gradeTone === "warn" ? "⚠" : "🚨";
+      const pillIcon =
+        gradeTone === "safe" ? "✔" : gradeTone === "warn" ? "⚠" : "🚨";
       return `
         <div class="flow-item tone-${gradeTone} ${selectedCls}" data-flow-id="${flow.id}" role="listitem" tabindex="0">
           <div class="flow-item-left">
@@ -174,6 +185,37 @@ function renderEmptyInspector() {
   `;
 }
 
+function buildComparisonBannerHtml(flowId) {
+  const cmp = state.lastComparison;
+  if (!cmp || cmp.new_flow.id !== flowId || cmp.previous_grade === null) {
+    return "";
+  }
+  const deltaSign = cmp.score_delta >= 0 ? `+${cmp.score_delta}` : `${cmp.score_delta}`;
+  const fixedBadges =
+    cmp.fixed_headers.length > 0
+      ? cmp.fixed_headers
+          .map(
+            (h) => `<span class="pill pill-safe">✔ Corregido: ${escapeHtml(h)}</span>`
+          )
+          .join("")
+      : `<span class="pill pill-warn">Sin cambios en escudos</span>`;
+
+  return `
+    <div class="diff-banner">
+      <div>
+        <div class="diff-scores">
+          <span>🔁 Resultado del Repetidor (Comparativa Antes vs. Después):</span>
+          <span class="pill pill-danger">Antes: Nota ${escapeHtml(cmp.previous_grade)} (${cmp.previous_score} pts)</span>
+          <span>➔</span>
+          <span class="pill pill-safe">Ahora: Nota ${escapeHtml(cmp.new_flow.security_audit.grade)} (${cmp.new_flow.security_audit.score} pts)</span>
+          <span class="diff-delta">${deltaSign} pts</span>
+        </div>
+        <div class="fixed-chips">${fixedBadges}</div>
+      </div>
+    </div>
+  `;
+}
+
 function renderInspector() {
   const flow = state.flows.find((f) => f.id === state.selectedFlowId);
   if (!flow) {
@@ -185,11 +227,11 @@ function renderInspector() {
   const gradeTone = getToneByGrade(audit.grade);
   const statusTone = getToneByStatus(flow.status_code);
   const verdict = getPlainVerdict(flow);
+  const comparisonHtml = buildComparisonBannerHtml(flow.id);
 
   let tabBodyHtml = "";
 
   if (state.activeTab === "security") {
-    // 1. Bloque de Avisos Coloreados de Alto Impacto
     let alertsHtml = "";
     if (audit.findings.length === 0) {
       alertsHtml = `
@@ -226,7 +268,6 @@ function renderInspector() {
       alertsHtml = `<div class="alerts-banner-list">${items}</div>`;
     }
 
-    // 2. Cuadrícula de Escudos con Borde Superior Coloreado
     const cardsHtml = PROTECTIONS_GUIDE.map((item) => {
       const isMissing = audit.missing_headers.includes(item.header);
       const cardToneCls = isMissing ? "card-missing" : "card-active";
@@ -253,6 +294,83 @@ function renderInspector() {
       ${alertsHtml}
       <div class="protection-grid">
         ${cardsHtml}
+      </div>
+    `;
+  } else if (state.activeTab === "repeater") {
+    const respHeadersJson = JSON.stringify(flow.response_headers, null, 2);
+    const reqHeadersJson = JSON.stringify(flow.request_headers, null, 2);
+
+    tabBodyHtml = `
+      <div class="repeater-card">
+        <div>
+          <h3 style="font-size:0.98rem; font-weight:800;">🔁 Repetidor y Laboratorio de Corrección en Vivo</h3>
+          <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.2rem;">
+            Modifica la dirección, el método o inyecta escudos de seguridad con 1 clic para reenviar la petición y comparar cómo sube su nota.
+          </p>
+        </div>
+
+        <!-- Botones Rápidos de Inyección de Escudos -->
+        <div>
+          <div style="font-size:0.78rem; font-weight:700; color:var(--text-secondary); margin-bottom:0.4rem;">
+            ⚡ Inyectar protecciones con 1 clic:
+          </div>
+          <div class="quick-shields-bar">
+            <button class="chip-btn" type="button" data-quick-https="true">🔒 Cambiar a HTTPS</button>
+            <button class="chip-btn" type="button" data-quick-header="Strict-Transport-Security">＋ Añadir HSTS</button>
+            <button class="chip-btn" type="button" data-quick-header="Content-Security-Policy">＋ Añadir CSP</button>
+            <button class="chip-btn" type="button" data-quick-header="X-Frame-Options">＋ Anti-Clickjacking</button>
+            <button class="chip-btn" type="button" data-quick-header="X-Content-Type-Options">＋ Nosniff</button>
+            <button class="chip-btn chip-magic" type="button" data-quick-all="true">✨ Blindar Todo (Nota A)</button>
+          </div>
+        </div>
+
+        <!-- Fila Método + URL + Código -->
+        <div class="repeater-row">
+          <div class="field">
+            <label for="rep-method">Método</label>
+            <select id="rep-method" class="method-select">
+              <option value="GET" ${flow.method === "GET" ? "selected" : ""}>GET</option>
+              <option value="POST" ${flow.method === "POST" ? "selected" : ""}>POST</option>
+              <option value="PUT" ${flow.method === "PUT" ? "selected" : ""}>PUT</option>
+              <option value="DELETE" ${flow.method === "DELETE" ? "selected" : ""}>DELETE</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="rep-url">Dirección URL a reenviar</label>
+            <input id="rep-url" class="search-input" type="text" value="${escapeHtml(flow.url)}" />
+          </div>
+          <div class="field">
+            <label for="rep-status">Estado HTTP</label>
+            <input id="rep-status" class="search-input" type="number" min="100" max="599" value="${flow.status_code}" />
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+          <div class="field">
+            <label for="rep-resp-headers">🛡️ Cabeceras de Seguridad (Respuesta JSON)</label>
+            <textarea id="rep-resp-headers" class="repeater-textarea">${escapeHtml(respHeadersJson)}</textarea>
+          </div>
+          <div class="field">
+            <label for="rep-req-headers">📤 Cabeceras de Petición (Cliente JSON)</label>
+            <textarea id="rep-req-headers" class="repeater-textarea">${escapeHtml(reqHeadersJson)}</textarea>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="rep-body">📦 Cuerpo / Payload enviado en la petición</label>
+          <textarea id="rep-body" class="repeater-textarea" style="min-height:75px;">${escapeHtml(flow.request_preview)}</textarea>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.75rem;">
+          <label style="display:inline-flex; align-items:center; gap:0.45rem; font-size:0.83rem; font-weight:600; cursor:pointer;">
+            <input id="rep-live-net" type="checkbox" />
+            🌐 Conectar por red real si el dominio es público (Con protección Anti-SSRF)
+          </label>
+
+          <button id="btn-run-repeater" class="btn btn-primary" type="button">
+            🚀 Reenviar Petición y Comparar Nota
+          </button>
+        </div>
       </div>
     `;
   } else if (state.activeTab === "headers") {
@@ -294,6 +412,8 @@ function renderInspector() {
 
   const container = document.getElementById("inspector-scroll");
   container.innerHTML = `
+    ${comparisonHtml}
+
     <!-- Banner Hero en Estilo Glass Coloreado -->
     <div class="score-hero hero-${gradeTone}">
       <div class="score-hero-left">
@@ -307,11 +427,14 @@ function renderInspector() {
         </div>
       </div>
 
-      <div style="display:flex; gap:0.5rem; align-items:center;">
+      <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
         <span class="pill pill-${statusTone}">HTTP ${flow.status_code}</span>
         <span class="pill" style="background:var(--glass-card-bg); border-color:var(--glass-outer-border);">
           ⏱ ${flow.duration_ms.toFixed(1)} ms
         </span>
+        <button id="btn-hero-repeater" class="btn btn-primary" type="button" style="padding:0.38rem 0.85rem; font-size:0.8rem;">
+          🔁 Modificar y Reenviar
+        </button>
       </div>
     </div>
 
@@ -319,6 +442,9 @@ function renderInspector() {
     <div class="segmented-tabs" role="tablist">
       <button class="seg-btn ${state.activeTab === "security" ? "active" : ""}" data-tab="security" type="button">
         🛡️ Avisos y Escudos (${audit.findings.length})
+      </button>
+      <button class="seg-btn ${state.activeTab === "repeater" ? "active" : ""}" data-tab="repeater" type="button">
+        🔁 Repetidor en Vivo
       </button>
       <button class="seg-btn ${state.activeTab === "headers" ? "active" : ""}" data-tab="headers" type="button">
         📋 Cabeceras Técnicas
@@ -338,6 +464,112 @@ function renderInspector() {
       renderInspector();
     });
   });
+
+  const heroRepBtn = document.getElementById("btn-hero-repeater");
+  if (heroRepBtn) {
+    heroRepBtn.addEventListener("click", () => {
+      state.activeTab = "repeater";
+      renderInspector();
+    });
+  }
+
+  wireRepeaterEvents(flow);
+}
+
+function wireRepeaterEvents(flow) {
+  if (state.activeTab !== "repeater") return;
+
+  const urlInput = document.getElementById("rep-url");
+  const respTextarea = document.getElementById("rep-resp-headers");
+
+  document.querySelectorAll("[data-quick-https]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      urlInput.value = urlInput.value.replace(/^http:\/\//i, "https://");
+    });
+  });
+
+  document.querySelectorAll("[data-quick-header]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const headerName = btn.getAttribute("data-quick-header");
+      try {
+        const current = JSON.parse(respTextarea.value || "{}");
+        current[headerName] = QUICK_SHIELD_VALUES[headerName];
+        respTextarea.value = JSON.stringify(current, null, 2);
+      } catch {
+        // Ignore malformed JSON
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-quick-all]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      urlInput.value = urlInput.value.replace(/^http:\/\//i, "https://");
+      try {
+        const current = JSON.parse(respTextarea.value || "{}");
+        Object.entries(QUICK_SHIELD_VALUES).forEach(([k, v]) => {
+          current[k] = v;
+        });
+        delete current["Server"];
+        delete current["server"];
+        respTextarea.value = JSON.stringify(current, null, 2);
+      } catch {
+        respTextarea.value = JSON.stringify(QUICK_SHIELD_VALUES, null, 2);
+      }
+    });
+  });
+
+  const runBtn = document.getElementById("btn-run-repeater");
+  if (runBtn) {
+    runBtn.addEventListener("click", async () => {
+      let parsedRespHeaders = {};
+      let parsedReqHeaders = {};
+      try {
+        parsedRespHeaders = JSON.parse(respTextarea.value || "{}");
+      } catch {
+        alert("El formato JSON de Cabeceras de Seguridad no es válido.");
+        return;
+      }
+      try {
+        parsedReqHeaders = JSON.parse(
+          document.getElementById("rep-req-headers").value || "{}"
+        );
+      } catch {
+        alert("El formato JSON de Cabeceras de Petición no es válido.");
+        return;
+      }
+
+      const payload = {
+        original_flow_id: flow.id,
+        method: document.getElementById("rep-method").value,
+        url: urlInput.value.trim(),
+        status_code: Number(document.getElementById("rep-status").value || 200),
+        request_headers: parsedReqHeaders,
+        response_headers: parsedRespHeaders,
+        request_body: document.getElementById("rep-body").value,
+        live_network: document.getElementById("rep-live-net").checked,
+      };
+
+      runBtn.textContent = "⏳ Procesando...";
+      runBtn.disabled = true;
+
+      const resp = await fetch("/api/v1/repeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (resp.ok) {
+        const result = await resp.json();
+        state.lastComparison = result;
+        state.selectedFlowId = result.new_flow.id;
+        state.activeTab = "security";
+        await fetchTelemetry();
+      } else {
+        runBtn.textContent = "🚀 Reenviar Petición y Comparar Nota";
+        runBtn.disabled = false;
+      }
+    });
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -357,6 +589,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("btn-clear").addEventListener("click", async () => {
+    state.lastComparison = null;
     await fetch("/api/v1/flows", { method: "DELETE" });
     await fetchTelemetry();
   });

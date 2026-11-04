@@ -883,3 +883,121 @@ html, body {
   font-weight: 700;
   color: var(--text-secondary);
 }
+
+/* ==========================================================================
+   Módulo Repetidor en Vivo & Banner Comparativo Antes vs. Después (Glass)
+   ========================================================================== */
+.diff-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.3rem;
+  border-radius: var(--radius-lg);
+  background: var(--safe-glass);
+  border: 1.5px solid var(--safe-border);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--glass-shadow);
+  flex-wrap: wrap;
+}
+
+.diff-scores {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.diff-delta {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 0.22rem 0.65rem;
+  border-radius: 999px;
+  background: var(--safe-solid);
+  color: #FFFFFF;
+}
+
+.fixed-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+
+.repeater-card {
+  border: 1.5px solid var(--glass-outer-border);
+  border-radius: var(--radius-lg);
+  padding: 1.3rem;
+  background: var(--glass-card-bg);
+  backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.quick-shields-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.85rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-muted);
+  border: 1px dashed var(--glass-outer-border);
+}
+
+.chip-btn {
+  padding: 0.36rem 0.75rem;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid var(--info-border);
+  background: var(--info-bg);
+  color: var(--info-text);
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.chip-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+}
+
+.chip-btn.chip-magic {
+  background: var(--safe-bg);
+  color: var(--safe-text);
+  border-color: var(--safe-border);
+}
+
+.repeater-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 120px;
+  gap: 0.6rem;
+}
+
+@media (max-width: 720px) {
+  .repeater-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.repeater-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.81rem;
+  background: var(--bg-muted);
+  border: 1px solid var(--glass-outer-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  resize: vertical;
+}
+
+.repeater-textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+

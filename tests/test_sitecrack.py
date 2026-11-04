@@ -18,14 +18,16 @@ from src.api.api_server import (
     health_check,
     ingest_flow,
     list_captured_flows,
+    repeat_and_audit_flow,
     seed_demo_flows,
     serve_graphical_app,
     simulate_custom_flow,
 )
 from src.api.database import SQLiteFlowRepository
 from src.core.proxy_core import MAX_PREVIEW_BYTES, SitecrackInterceptorAddon
+from src.core.repeater_service import is_safe_public_host
 from src.core.security_analyzer import PassiveSecurityAnalyzer, sanitize_headers
-from src.domain.schemas import HttpFlowCreate, HttpFlowRecord
+from src.domain.schemas import HttpFlowCreate, HttpFlowRecord, RepeatFlowRequest
 from src.ui.cli_app import (
     build_inspector_renderable,
     format_grade_badge,
@@ -179,3 +181,56 @@ def test_accessible_visual_formatters() -> None:
 
     grade_badge = format_grade_badge("A", 95)
     assert "★ A" in grade_badge.plain
+
+
+def test_repeater_before_after_comparison_and_ssrf_guard(tmp_path: Path) -> None:
+    # 1. Verificar guardrail Anti-SSRF (CWE-918)
+    assert is_safe_public_host("127.0.0.1") is False
+    assert is_safe_public_host("localhost") is False
+    assert is_safe_public_host("169.254.169.254") is False
+    assert is_safe_public_host("192.168.1.10") is False
+    assert is_safe_public_host("portal.internal.local") is False
+
+    # 2. Flujo vulnerable inicial (HTTP plano sin escudos -> Nota F)
+    repo = SQLiteFlowRepository(db_path=tmp_path / "repeater.db")
+    vuln_flow = simulate_custom_flow(
+        sim=SimulationRequest(
+            url="http://legacy-portal.internal.local/auth/session",
+            method="POST",
+            status_code=500,
+            preset="vulnerable",
+        ),
+        repo=repo,
+    )
+    assert vuln_flow.security_audit.grade == "F"
+    assert vuln_flow.security_audit.score == 0
+
+    # 3. Ejecutar el Repetidor pasando a HTTPS e inyectando todos los escudos OWASP
+    rep_result = repeat_and_audit_flow(
+        payload=RepeatFlowRequest(
+            original_flow_id=vuln_flow.id,
+            method="POST",
+            url="https://legacy-portal.internal.local/auth/session",
+            status_code=200,
+            request_headers={"Host": "legacy-portal.internal.local"},
+            response_headers={
+                "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+                "Content-Security-Policy": "default-src 'self'",
+                "X-Frame-Options": "DENY",
+                "X-Content-Type-Options": "nosniff",
+                "Referrer-Policy": "strict-origin-when-cross-origin",
+                "Permissions-Policy": "geolocation=(), microphone=()",
+            },
+            request_body='{"username": "auditor_soc"}',
+            live_network=False,
+        ),
+        repo=repo,
+    )
+
+    assert rep_result.previous_grade == "F"
+    assert rep_result.new_flow.security_audit.grade == "A"
+    assert rep_result.new_flow.security_audit.score == 100
+    assert rep_result.score_delta == 100
+    assert "HTTPS / TLS Cifrado" in rep_result.fixed_headers
+    assert "Strict-Transport-Security" in rep_result.fixed_headers
+
