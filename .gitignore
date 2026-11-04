@@ -1,0 +1,33 @@
+# Virtual Environments
+venv/
+.venv/
+ENV/
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local SQLite Databases & Captured Traffic
+data/*.db
+data/*.db-shm
+data/*.db-wal
+*.sqlite
+*.sqlite3
+*.flow
+*.har
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# OS & IDE Metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
