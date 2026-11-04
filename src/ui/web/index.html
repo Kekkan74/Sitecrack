@@ -8,21 +8,21 @@
 </head>
 <body>
   <div class="app-layout">
-    <!-- Barra Superior Limpia con Métricas Integradas -->
+    <!-- Banner Superior en Estilo Visual Glassmorphism -->
     <header class="navbar" role="banner">
       <div class="brand-group">
         <div class="brand-logo" aria-hidden="true">SC</div>
         <div>
           <h1 class="brand-name">Sitecrack</h1>
-          <p class="brand-tagline">Inspector sencillo de peticiones y seguridad web</p>
+          <p class="brand-tagline">Inspector visual de peticiones y seguridad web</p>
         </div>
       </div>
 
       <div class="stats-pills" aria-label="Resumen de tráfico">
-        <span class="stat-pill">Total <strong id="stat-total">0</strong></span>
-        <span class="stat-pill">Seguras (HTTPS) <strong id="stat-https">0</strong></span>
-        <span class="stat-pill">Con avisos <strong id="stat-low-sec">0</strong></span>
-        <span class="stat-pill">Media <strong id="stat-latency">0 ms</strong></span>
+        <span class="stat-pill pill-total">📊 Total <strong id="stat-total">0</strong></span>
+        <span class="stat-pill pill-https">🔒 Seguras (HTTPS) <strong id="stat-https">0</strong></span>
+        <span class="stat-pill pill-alerts">🚨 Con avisos <strong id="stat-low-sec">0</strong></span>
+        <span class="stat-pill pill-speed">⚡ Media <strong id="stat-latency">0 ms</strong></span>
       </div>
 
       <div class="nav-actions">
@@ -44,9 +44,9 @@
       </div>
     </header>
 
-    <!-- Espacio Principal en 2 Columnas -->
+    <!-- Espacio Principal en 2 Columnas Glass -->
     <main class="main-grid">
-      <!-- Columna Izquierda: Lista Simplificada de Peticiones -->
+      <!-- Columna Izquierda: Lista de Peticiones Coloreada -->
       <section class="panel" aria-label="Lista de peticiones">
         <div class="search-bar">
           <input
@@ -70,7 +70,7 @@
         </div>
       </section>
 
-      <!-- Columna Derecha: Diagnóstico Visual y Claro -->
+      <!-- Columna Derecha: Banner Hero Glass y Avisos a Todo Color -->
       <section class="panel" aria-label="Detalle de la petición">
         <div id="inspector-scroll" class="inspector-scroll">
           <!-- Contenido del inspector inyectado por app.js -->
@@ -79,13 +79,13 @@
     </main>
   </div>
 
-  <!-- Ventana Modal Simple para Crear una Prueba -->
+  <!-- Ventana Modal Glass para Crear una Prueba -->
   <div id="simulator-modal" class="modal-backdrop" hidden>
     <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div>
-        <h2 id="modal-title" style="font-size:1.05rem; font-weight:700;">Probar una dirección web</h2>
+        <h2 id="modal-title" style="font-size:1.05rem; font-weight:800;">Probar una dirección web</h2>
         <p style="font-size:0.83rem; color:var(--text-muted); margin-top:0.2rem;">
-          Simula una petición para ver qué nota de seguridad recibe.
+          Simula una petición para ver qué avisos de seguridad genera.
         </p>
       </div>
 
@@ -115,9 +115,9 @@
       <div class="field">
         <label for="sim-preset">Nivel de seguridad simulado</label>
         <select id="sim-preset" class="method-select">
-          <option value="hardened">Protección alta (Recomendada)</option>
-          <option value="partial">Protección media (Faltan escudos)</option>
-          <option value="vulnerable">Sin protección (Peligrosa)</option>
+          <option value="hardened">✔ Protección alta (Recomendada)</option>
+          <option value="partial">⚠ Protección media (Faltan escudos)</option>
+          <option value="vulnerable">🚨 Sin protección (Peligrosa)</option>
         </select>
       </div>
 

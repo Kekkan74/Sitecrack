@@ -1,6 +1,6 @@
 /* ==========================================================================
-   Sitecrack Modern UI Controller (app.js)
-   Interfaz limpia, visual y fácil de entender para cualquier usuario.
+   Sitecrack Modern Glass UI Controller (app.js)
+   Banners en estilo cristal esmerilado y avisos coloreados de alto impacto.
    ========================================================================== */
 
 const state = {
@@ -68,15 +68,15 @@ function getPlainVerdict(flow) {
   const grade = flow.security_audit.grade;
   const missingCount = flow.security_audit.missing_headers.length;
   if (flow.scheme !== "https") {
-    return "Conexión sin cifrar (HTTP): los datos viajan en texto abierto.";
+    return "🚨 Peligro: Conexión sin cifrar (HTTP). Los datos viajan en texto abierto.";
   }
   if (grade === "A") {
-    return "Conexión bien protegida: cuenta con cifrado HTTPS y escudos activos.";
+    return "✔ Conexión blindada: cuenta con cifrado HTTPS y escudos activos.";
   }
   if (grade === "B" || grade === "C") {
-    return `Protección parcial: conexión cifrada, pero faltan ${missingCount} escudos recomendados.`;
+    return `⚠ Aviso de seguridad: conexión cifrada, pero faltan ${missingCount} escudos recomendados.`;
   }
-  return `Atención: esta respuesta tiene ${missingCount} carencias importantes de seguridad.`;
+  return `🚨 Riesgo alto: esta respuesta tiene ${missingCount} carencias críticas de protección.`;
 }
 
 async function fetchTelemetry() {
@@ -116,7 +116,7 @@ function renderFlowList() {
   if (state.flows.length === 0) {
     container.innerHTML = `
       <div class="empty-placeholder">
-        <p style="font-weight:600; color:var(--text-main); margin-bottom:0.35rem;">Lista vacía</p>
+        <p style="font-weight:700; color:var(--text-main); margin-bottom:0.35rem;">Lista vacía</p>
         <p style="font-size:0.84rem;">Pulsa <strong>"Cargar ejemplos"</strong> o <strong>"＋ Nueva prueba"</strong> arriba a la derecha.</p>
       </div>
     `;
@@ -128,8 +128,9 @@ function renderFlowList() {
       const selectedCls = flow.id === state.selectedFlowId ? "selected" : "";
       const gradeTone = getToneByGrade(flow.security_audit.grade);
       const lockIcon = flow.scheme === "https" ? "🔒" : "🔓";
+      const pillIcon = gradeTone === "safe" ? "✔" : gradeTone === "warn" ? "⚠" : "🚨";
       return `
-        <div class="flow-item ${selectedCls}" data-flow-id="${flow.id}" role="listitem" tabindex="0">
+        <div class="flow-item tone-${gradeTone} ${selectedCls}" data-flow-id="${flow.id}" role="listitem" tabindex="0">
           <div class="flow-item-left">
             <div class="flow-top-line">
               <span class="method-tag">${escapeHtml(flow.method)}</span>
@@ -140,7 +141,7 @@ function renderFlowList() {
 
           <div class="flow-item-right">
             <span class="pill pill-${gradeTone}">
-              Nota ${escapeHtml(flow.security_audit.grade)} · ${flow.security_audit.score}
+              ${pillIcon} Nota ${escapeHtml(flow.security_audit.grade)} · ${flow.security_audit.score}
             </span>
             <span class="latency-label">HTTP ${flow.status_code} · ${flow.duration_ms.toFixed(0)} ms</span>
           </div>
@@ -168,7 +169,7 @@ function renderFlowList() {
 function renderEmptyInspector() {
   document.getElementById("inspector-scroll").innerHTML = `
     <div class="empty-placeholder">
-      Selecciona una petición a la izquierda para ver su diagnóstico visual de seguridad.
+      Selecciona una petición a la izquierda para ver sus avisos y escudos de seguridad.
     </div>
   `;
 }
@@ -188,13 +189,52 @@ function renderInspector() {
   let tabBodyHtml = "";
 
   if (state.activeTab === "security") {
+    // 1. Bloque de Avisos Coloreados de Alto Impacto
+    let alertsHtml = "";
+    if (audit.findings.length === 0) {
+      alertsHtml = `
+        <div class="alerts-banner-list">
+          <div class="alert-banner sev-SAFE">
+            <span class="alert-badge-tag">✔ SEGURO</span>
+            <div class="alert-text-group">
+              <span class="alert-title">Sin avisos de riesgo detectados</span>
+              <span class="alert-desc">Esta respuesta cumple todas las políticas de cabeceras seguras evaluadas.</span>
+            </div>
+          </div>
+        </div>
+      `;
+    } else {
+      const items = audit.findings
+        .map((f) => {
+          const label =
+            f.severity === "HIGH"
+              ? "🚨 CRÍTICO"
+              : f.severity === "MEDIUM"
+              ? "⚠ AVISO"
+              : "ℹ INFO";
+          return `
+            <div class="alert-banner sev-${escapeHtml(f.severity)}">
+              <span class="alert-badge-tag">${label}</span>
+              <div class="alert-text-group">
+                <span class="alert-title">${escapeHtml(f.header)}</span>
+                <span class="alert-desc">${escapeHtml(f.description)}</span>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+      alertsHtml = `<div class="alerts-banner-list">${items}</div>`;
+    }
+
+    // 2. Cuadrícula de Escudos con Borde Superior Coloreado
     const cardsHtml = PROTECTIONS_GUIDE.map((item) => {
       const isMissing = audit.missing_headers.includes(item.header);
+      const cardToneCls = isMissing ? "card-missing" : "card-active";
       const badgeHtml = isMissing
-        ? `<span class="pill pill-danger">✖ Falta</span>`
-        : `<span class="pill pill-safe">✔ Activo</span>`;
+        ? `<span class="pill pill-danger">🚨 Falta escudo</span>`
+        : `<span class="pill pill-safe">✔ Protegido</span>`;
       return `
-        <div class="protection-card">
+        <div class="protection-card ${cardToneCls}">
           <div>
             <div class="protection-header">
               <span class="protection-name">${escapeHtml(item.title)}</span>
@@ -210,6 +250,7 @@ function renderInspector() {
     }).join("");
 
     tabBodyHtml = `
+      ${alertsHtml}
       <div class="protection-grid">
         ${cardsHtml}
       </div>
@@ -230,22 +271,22 @@ function renderInspector() {
 
     tabBodyHtml = `
       <div class="section-box">
-        <div class="section-title">Cabeceras enviadas por el navegador (Tokens ocultados por seguridad)</div>
+        <div class="section-title">📤 Cabeceras enviadas por el navegador (Tokens ocultados por seguridad)</div>
         <div class="kv-list">${reqList || "Ninguna"}</div>
       </div>
       <div class="section-box">
-        <div class="section-title">Cabeceras respondidas por el servidor</div>
+        <div class="section-title">📥 Cabeceras respondidas por el servidor</div>
         <div class="kv-list">${respList || "Ninguna"}</div>
       </div>
     `;
   } else {
     tabBodyHtml = `
       <div class="section-box">
-        <div class="section-title">Datos enviados en la petición (${flow.request_size} bytes)</div>
+        <div class="section-title">📤 Datos enviados en la petición (${flow.request_size} bytes)</div>
         <pre class="code-viewer">${escapeHtml(flow.request_preview || "Esta petición no envió datos adjuntos.")}</pre>
       </div>
       <div class="section-box">
-        <div class="section-title">Respuesta recibida del servidor (${flow.response_size} bytes · ${escapeHtml(flow.content_type)})</div>
+        <div class="section-title">📥 Respuesta recibida del servidor (${flow.response_size} bytes · ${escapeHtml(flow.content_type)})</div>
         <pre class="code-viewer">${escapeHtml(flow.response_preview || "Sin vista previa de texto.")}</pre>
       </div>
     `;
@@ -253,8 +294,8 @@ function renderInspector() {
 
   const container = document.getElementById("inspector-scroll");
   container.innerHTML = `
-    <!-- Tarjeta Resumen Hero -->
-    <div class="score-hero">
+    <!-- Banner Hero en Estilo Glass Coloreado -->
+    <div class="score-hero hero-${gradeTone}">
       <div class="score-hero-left">
         <div class="grade-circle ${gradeTone}">
           ${escapeHtml(audit.grade)}
@@ -267,23 +308,23 @@ function renderInspector() {
       </div>
 
       <div style="display:flex; gap:0.5rem; align-items:center;">
-        <span class="pill pill-${statusTone}">Respuesta ${flow.status_code}</span>
-        <span class="pill" style="background:var(--bg-surface); border-color:var(--border-color);">
-          ${flow.duration_ms.toFixed(1)} ms
+        <span class="pill pill-${statusTone}">HTTP ${flow.status_code}</span>
+        <span class="pill" style="background:var(--glass-card-bg); border-color:var(--glass-outer-border);">
+          ⏱ ${flow.duration_ms.toFixed(1)} ms
         </span>
       </div>
     </div>
 
-    <!-- Pestañas Limpias -->
+    <!-- Pestañas Segmented Control -->
     <div class="segmented-tabs" role="tablist">
       <button class="seg-btn ${state.activeTab === "security" ? "active" : ""}" data-tab="security" type="button">
-        Escudos de Seguridad (6)
+        🛡️ Avisos y Escudos (${audit.findings.length})
       </button>
       <button class="seg-btn ${state.activeTab === "headers" ? "active" : ""}" data-tab="headers" type="button">
-        Cabeceras Técnicas
+        📋 Cabeceras Técnicas
       </button>
       <button class="seg-btn ${state.activeTab === "payload" ? "active" : ""}" data-tab="payload" type="button">
-        Contenido / Datos
+        📦 Contenido / Datos
       </button>
     </div>
 
