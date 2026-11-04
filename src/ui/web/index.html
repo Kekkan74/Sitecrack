@@ -23,11 +23,27 @@
         <span class="stat-pill pill-https">🔒 Seguras (HTTPS) <strong id="stat-https">0</strong></span>
         <span class="stat-pill pill-alerts">🚨 Con avisos <strong id="stat-low-sec">0</strong></span>
         <span class="stat-pill pill-speed">⚡ Media <strong id="stat-latency">0 ms</strong></span>
+
+        <!-- Barra Visual de Salud Global -->
+        <div class="health-bar-wrapper" title="Proporción de peticiones seguras frente a peticiones con avisos">
+          <div class="health-bar-label">
+            <span>Salud global</span>
+            <span id="health-pct-text">100%</span>
+          </div>
+          <div class="health-bar-track">
+            <div id="health-seg-safe" class="health-seg-safe" style="width: 100%"></div>
+            <div id="health-seg-warn" class="health-seg-warn" style="width: 0%"></div>
+            <div id="health-seg-danger" class="health-seg-danger" style="width: 0%"></div>
+          </div>
+        </div>
       </div>
 
       <div class="nav-actions">
+        <button id="btn-open-live-scan" class="btn btn-live-scan" type="button" title="Conectar en tiempo real a una web pública y auditar sus escudos">
+          🌐 Auditar Web Real
+        </button>
         <button id="btn-open-simulator" class="btn btn-primary" type="button">
-          ＋ Nueva prueba
+          ＋ Simular prueba
         </button>
         <button id="btn-export-report" class="btn" type="button" title="Abrir informe ejecutivo listo para imprimir o guardar en PDF">
           📄 Exportar Informe
@@ -87,13 +103,55 @@
     </main>
   </div>
 
-  <!-- Ventana Modal Glass para Crear una Prueba -->
+  <!-- Ventana Modal Glass para Auditar una Web Real en Vivo -->
+  <div id="live-scan-modal" class="modal-backdrop" hidden>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="live-modal-title">
+      <div>
+        <h2 id="live-modal-title" style="font-size:1.05rem; font-weight:800;">🌐 Auditar una Web Real en Vivo</h2>
+        <p style="font-size:0.83rem; color:var(--text-muted); margin-top:0.2rem;">
+          Conecta en tiempo real a cualquier dominio público (con protección Anti-SSRF) para medir su velocidad y auditar sus cabeceras OWASP reales.
+        </p>
+      </div>
+
+      <div>
+        <div style="font-size:0.78rem; font-weight:700; color:var(--text-secondary); margin-bottom:0.4rem;">
+          ⚡ Probar con un sitio público de ejemplo:
+        </div>
+        <div class="quick-shields-bar">
+          <button class="chip-btn" type="button" data-sample-url="https://example.com">example.com</button>
+          <button class="chip-btn" type="button" data-sample-url="https://github.com">github.com</button>
+          <button class="chip-btn" type="button" data-sample-url="https://www.wikipedia.org">wikipedia.org</button>
+          <button class="chip-btn" type="button" data-sample-url="https://cloudflare.com">cloudflare.com</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="live-scan-url">Dirección web pública (URL)</label>
+        <input id="live-scan-url" class="search-input" type="text" value="https://example.com" placeholder="https://ejemplo.com" />
+      </div>
+
+      <div class="field">
+        <label for="live-scan-method">Método de consulta</label>
+        <select id="live-scan-method" class="method-select">
+          <option value="GET">GET (Petición completa)</option>
+          <option value="HEAD">HEAD (Solo cabeceras rápidas)</option>
+        </select>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.5rem;">
+        <button id="btn-close-live-modal" class="btn" type="button">Cancelar</button>
+        <button id="btn-submit-live-scan" class="btn btn-live-scan" type="button">🚀 Conectar y Auditar Ahora</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ventana Modal Glass para Crear una Prueba Simulada -->
   <div id="simulator-modal" class="modal-backdrop" hidden>
     <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div>
-        <h2 id="modal-title" style="font-size:1.05rem; font-weight:800;">Probar una dirección web</h2>
+        <h2 id="modal-title" style="font-size:1.05rem; font-weight:800;">Simular una dirección web</h2>
         <p style="font-size:0.83rem; color:var(--text-muted); margin-top:0.2rem;">
-          Simula una petición para ver qué avisos de seguridad genera.
+          Simula una petición local para ver qué avisos de seguridad genera.
         </p>
       </div>
 
@@ -135,6 +193,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Contenedor de Notificaciones Flotantes Glass Toast -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
   <script src="/static/app.js"></script>
 </body>

@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -24,6 +24,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.api.database import FlowRepositoryProtocol, SQLiteFlowRepository
+from src.core.live_scanner import LiveUrlScanner
+from src.core.remediation_generator import generate_remediation_snippets
 from src.core.repeater_service import RepeaterService
 from src.core.report_generator import generate_html_audit_report
 from src.core.security_analyzer import PassiveSecurityAnalyzer, sanitize_headers
@@ -56,6 +58,13 @@ class SimulationRequest(BaseModel):
     preset: Literal["hardened", "partial", "vulnerable"] = "hardened"
 
 
+class LiveScanRequest(BaseModel):
+    """Solicitud para auditar en vivo un sitio web público real."""
+
+    url: str = Field(..., min_length=4, max_length=2048, examples=["https://github.com"])
+    method: Literal["GET", "HEAD"] = "GET"
+
+
 @lru_cache(maxsize=1)
 def get_repository() -> FlowRepositoryProtocol:
     """Proveedor singleton del repositorio SQLite para Inyección de Dependencias."""
@@ -65,10 +74,10 @@ def get_repository() -> FlowRepositoryProtocol:
 app = FastAPI(
     title="Sitecrack Graphical App & Telemetry API",
     description=(
-        "Aplicación gráfica, Repetidor en vivo y backend RESTful ligero de inspección "
-        "HTTP/S para la suite de auditoría web Sitecrack."
+        "Aplicación gráfica, Auditor de Webs Reales en Vivo, Repetidor y backend "
+        "RESTful ligero de inspección HTTP/S para Sitecrack."
     ),
-    version="2.1.0",
+    version="2.2.0",
 )
 
 if WEB_UI_DIR.exists():
@@ -84,7 +93,7 @@ def serve_graphical_app() -> FileResponse:
 @app.get("/health", tags=["System"])
 def health_check() -> dict[str, str]:
     """Verifica disponibilidad operativa del servicio Backend."""
-    return {"status": "online", "service": "sitecrack-app", "version": "2.1.0"}
+    return {"status": "online", "service": "sitecrack-app", "version": "2.2.0"}
 
 
 @app.post(
@@ -105,6 +114,68 @@ def ingest_flow(
 ) -> HttpFlowRecord:
     """Recibe y persiste un flujo HTTP/S interceptado desde `proxy_core.py`."""
     return repo.save_flow(payload)
+
+
+@app.post(
+    "/api/v1/scan-live",
+    response_model=HttpFlowRecord,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Live Scanner"],
+)
+def scan_live_website(
+    payload: LiveScanRequest,
+    repo: FlowRepositoryProtocol = Depends(get_repository),
+) -> HttpFlowRecord:
+    """
+    Se conecta en tiempo real a un sitio web público real (con protección Anti-SSRF),
+    mide su latencia, audita sus cabeceras OWASP reales y guarda el resultado.
+    """
+    scanner = LiveUrlScanner(repo=repo)
+    try:
+        return scanner.scan_public_url(raw_url=payload.url, method=payload.method)
+    except ValueError as val_err:
+        err_msg = str(val_err)
+        code = (
+            status.HTTP_403_FORBIDDEN
+            if "Anti-SSRF" in err_msg
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(
+            status_code=code,
+            detail=err_msg,
+        ) from val_err
+    except RuntimeError as net_err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(net_err),
+        ) from net_err
+
+
+@app.get(
+    "/api/v1/flows/{flow_id}/remediation",
+    tags=["Remediation"],
+)
+def get_flow_remediation_code(
+    flow_id: int,
+    repo: FlowRepositoryProtocol = Depends(get_repository),
+) -> Dict[str, object]:
+    """Devuelve código listo para copiar (FastAPI, Nginx, Apache, Express) que repara los escudos ausentes."""
+    record = repo.get_flow_by_id(flow_id)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Flujo con ID {flow_id} no encontrado.",
+        )
+    snippets = generate_remediation_snippets(
+        missing_headers=record.security_audit.missing_headers,
+        scheme=record.scheme,
+    )
+    return {
+        "flow_id": record.id,
+        "host": record.host,
+        "missing_headers": record.security_audit.missing_headers,
+        **snippets,
+    }
 
 
 @app.post(
@@ -189,7 +260,7 @@ def simulate_custom_flow(
     req_headers = sanitize_headers(
         {
             "Host": host,
-            "User-Agent": "Sitecrack-App-Simulator/2.1",
+            "User-Agent": "Sitecrack-App-Simulator/2.2",
             "Accept": "application/json",
             "Authorization": "Bearer token_simulado_secreto_999",
         }
@@ -318,4 +389,3 @@ def export_json_report(
         "stats": stats.model_dump(),
         "flows": [f.model_dump() for f in flows],
     }
-

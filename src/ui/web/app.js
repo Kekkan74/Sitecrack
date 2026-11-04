@@ -1,13 +1,15 @@
 /* ==========================================================================
    Sitecrack Modern Glass UI Controller (app.js)
-   Incluye Banners Glass, Avisos a Todo Color, Repetidor en Vivo,
-   Inspector de Sesiones/Cookies y Exportador de Informes HTML/PDF.
+   Incluye Banners Glass, Anillo SVG Animado, Salud Global, Auditor Web Real,
+   Generador de Código de Solución, Repetidor en Vivo y Notificaciones Toast.
    ========================================================================== */
 
 const state = {
   flows: [],
   selectedFlowId: null,
   activeTab: "security",
+  activeStack: "fastapi",
+  remediationCache: {},
   hostFilter: "",
   methodFilter: "",
   gradeFilter: "",
@@ -64,6 +66,25 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+function showToast(message, tone = "safe") {
+  const container = document.getElementById("toast-container");
+  if (!container) return;
+  const toast = document.createElement("div");
+  const toneClass =
+    tone === "danger"
+      ? "toast-danger"
+      : tone === "warn"
+      ? "toast-warn"
+      : "toast-safe";
+  const icon = tone === "danger" ? "🚨" : tone === "warn" ? "⚠" : "✔";
+  toast.className = `glass-toast ${toneClass}`;
+  toast.innerHTML = `<span>${icon}</span><span>${escapeHtml(message)}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, 3600);
+}
+
 function getToneByGrade(grade) {
   if (grade === "A" || grade === "B") return "safe";
   if (grade === "C" || grade === "D") return "warn";
@@ -89,6 +110,69 @@ function getPlainVerdict(flow) {
     return `⚠ Aviso de seguridad: conexión cifrada, pero faltan ${missingCount} escudos recomendados.`;
   }
   return `🚨 Riesgo alto: esta respuesta tiene ${missingCount} carencias críticas de protección.`;
+}
+
+function buildScoreRingSvg(grade, score, tone) {
+  const radius = 28;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, Number(score) || 0));
+  const offset = circumference - (clamped / 100) * circumference;
+
+  return `
+    <div class="score-ring-wrap" aria-label="Puntuación ${clamped} sobre 100, Nota ${escapeHtml(grade)}">
+      <svg class="score-ring-svg" viewBox="0 0 72 72">
+        <circle class="score-ring-bg" cx="36" cy="36" r="${radius}"></circle>
+        <circle
+          class="score-ring-fill ${tone}"
+          cx="36"
+          cy="36"
+          r="${radius}"
+          stroke-dasharray="${circumference.toFixed(1)}"
+          stroke-dashoffset="${offset.toFixed(1)}"
+        ></circle>
+      </svg>
+      <div class="score-ring-center">
+        <span class="score-ring-grade">${escapeHtml(grade)}</span>
+        <span class="score-ring-pts">${clamped}/100</span>
+      </div>
+    </div>
+  `;
+}
+
+function updateGlobalHealthBar() {
+  const total = state.flows.length;
+  const safeSeg = document.getElementById("health-seg-safe");
+  const warnSeg = document.getElementById("health-seg-warn");
+  const dangerSeg = document.getElementById("health-seg-danger");
+  const pctText = document.getElementById("health-pct-text");
+  if (!safeSeg || !warnSeg || !dangerSeg || !pctText) return;
+
+  if (total === 0) {
+    safeSeg.style.width = "100%";
+    warnSeg.style.width = "0%";
+    dangerSeg.style.width = "0%";
+    pctText.textContent = "100%";
+    return;
+  }
+
+  let safeCount = 0;
+  let warnCount = 0;
+  let dangerCount = 0;
+  state.flows.forEach((f) => {
+    const tone = getToneByGrade(f.security_audit.grade);
+    if (tone === "safe") safeCount += 1;
+    else if (tone === "warn") warnCount += 1;
+    else dangerCount += 1;
+  });
+
+  const safePct = Math.round((safeCount / total) * 100);
+  const warnPct = Math.round((warnCount / total) * 100);
+  const dangerPct = Math.max(0, 100 - safePct - warnPct);
+
+  safeSeg.style.width = `${safePct}%`;
+  warnSeg.style.width = `${warnPct}%`;
+  dangerSeg.style.width = `${dangerPct}%`;
+  pctText.textContent = `${safePct}% seguras`;
 }
 
 function getFilteredFlows() {
@@ -119,6 +203,7 @@ async function fetchTelemetry() {
   document.getElementById("stat-low-sec").textContent = stats.low_security_count;
   document.getElementById("stat-latency").textContent = `${stats.avg_duration_ms} ms`;
 
+  updateGlobalHealthBar();
   renderFlowList();
 
   const visibleFlows = getFilteredFlows();
@@ -142,7 +227,7 @@ function renderFlowList() {
     container.innerHTML = `
       <div class="empty-placeholder">
         <p style="font-weight:700; color:var(--text-main); margin-bottom:0.35rem;">Sin peticiones para este filtro</p>
-        <p style="font-size:0.84rem;">Pulsa <strong>"Cargar ejemplos"</strong> o cambia el filtro superior.</p>
+        <p style="font-size:0.84rem;">Pulsa <strong>"🌐 Auditar Web Real"</strong> o <strong>"Cargar ejemplos"</strong>.</p>
       </div>
     `;
     return;
@@ -195,7 +280,7 @@ function renderFlowList() {
 function renderEmptyInspector() {
   document.getElementById("inspector-scroll").innerHTML = `
     <div class="empty-placeholder">
-      Selecciona una petición a la izquierda para ver sus avisos y escudos de seguridad.
+      Selecciona una petición a la izquierda o pulsa <strong>"🌐 Auditar Web Real"</strong> arriba.
     </div>
   `;
 }
@@ -326,6 +411,72 @@ function buildSessionCookieTabHtml(flow) {
   `;
 }
 
+function buildRemediationTabHtml(flow) {
+  const cached = state.remediationCache[flow.id];
+  if (!cached) {
+    return `
+      <div class="remediation-card">
+        <p style="font-size:0.88rem; color:var(--text-secondary);">⏳ Generando código de solución personalizado para <strong>${escapeHtml(flow.host)}</strong>...</p>
+      </div>
+    `;
+  }
+
+  const snippet = cached[state.activeStack] || cached.fastapi || "";
+  const missingCount = cached.missing_headers.length;
+  const summaryBadge =
+    missingCount === 0
+      ? `<span class="pill pill-safe">✔ Todos los escudos presentes</span>`
+      : `<span class="pill pill-warn">🛠️ Corrige ${missingCount} cabeceras ausentes</span>`;
+
+  return `
+    <div class="remediation-card">
+      <div class="remediation-toolbar">
+        <div>
+          <h3 style="font-size:0.98rem; font-weight:800;">🛠️ Generador Automático de Código de Solución (Copy & Paste)</h3>
+          <p style="font-size:0.83rem; color:var(--text-secondary); margin-top:0.2rem;">
+            Copia y pega este bloque en tu servidor para activar los escudos que le faltan a <strong>${escapeHtml(flow.host)}</strong>.
+          </p>
+        </div>
+        ${summaryBadge}
+      </div>
+
+      <div class="remediation-toolbar">
+        <div class="stack-selector" role="tablist">
+          <button class="stack-btn ${state.activeStack === "fastapi" ? "active" : ""}" data-stack="fastapi" type="button">
+            🐍 FastAPI (Python)
+          </button>
+          <button class="stack-btn ${state.activeStack === "nginx" ? "active" : ""}" data-stack="nginx" type="button">
+            🟢 Nginx
+          </button>
+          <button class="stack-btn ${state.activeStack === "apache" ? "active" : ""}" data-stack="apache" type="button">
+            🪶 Apache (.htaccess)
+          </button>
+          <button class="stack-btn ${state.activeStack === "express" ? "active" : ""}" data-stack="express" type="button">
+            🟩 Node.js (Express)
+          </button>
+        </div>
+
+        <button id="btn-copy-remediation" class="btn btn-primary" type="button">
+          📋 Copiar código de solución
+        </button>
+      </div>
+
+      <pre id="remediation-code-block" class="code-viewer">${escapeHtml(snippet)}</pre>
+    </div>
+  `;
+}
+
+async function ensureRemediationLoaded(flowId) {
+  if (state.remediationCache[flowId]) return;
+  const resp = await fetch(`/api/v1/flows/${flowId}/remediation`);
+  if (resp.ok) {
+    state.remediationCache[flowId] = await resp.json();
+    if (state.selectedFlowId === flowId && state.activeTab === "remediation") {
+      renderInspector();
+    }
+  }
+}
+
 function renderInspector() {
   const flow = state.flows.find((f) => f.id === state.selectedFlowId);
   if (!flow) {
@@ -338,6 +489,7 @@ function renderInspector() {
   const statusTone = getToneByStatus(flow.status_code);
   const verdict = getPlainVerdict(flow);
   const comparisonHtml = buildComparisonBannerHtml(flow.id);
+  const scoreRingHtml = buildScoreRingSvg(audit.grade, audit.score, gradeTone);
 
   let tabBodyHtml = "";
 
@@ -406,6 +558,9 @@ function renderInspector() {
         ${cardsHtml}
       </div>
     `;
+  } else if (state.activeTab === "remediation") {
+    ensureRemediationLoaded(flow.id);
+    tabBodyHtml = buildRemediationTabHtml(flow);
   } else if (state.activeTab === "repeater") {
     const respHeadersJson = JSON.stringify(flow.response_headers, null, 2);
     const reqHeadersJson = JSON.stringify(flow.request_headers, null, 2);
@@ -524,13 +679,10 @@ function renderInspector() {
   container.innerHTML = `
     ${comparisonHtml}
 
-    <!-- Banner Hero en Estilo Glass Coloreado -->
+    <!-- Banner Hero en Estilo Glass Coloreado con Anillo SVG Animado -->
     <div class="score-hero hero-${gradeTone}">
       <div class="score-hero-left">
-        <div class="grade-circle ${gradeTone}">
-          ${escapeHtml(audit.grade)}
-          <span>${audit.score}/100</span>
-        </div>
+        ${scoreRingHtml}
         <div>
           <div class="hero-verdict">${escapeHtml(verdict)}</div>
           <div class="hero-url">${escapeHtml(flow.method)} ${escapeHtml(flow.url)}</div>
@@ -542,6 +694,9 @@ function renderInspector() {
         <span class="pill" style="background:var(--glass-card-bg); border-color:var(--glass-outer-border);">
           ⏱ ${flow.duration_ms.toFixed(1)} ms
         </span>
+        <button id="btn-hero-remediation" class="btn" type="button" style="padding:0.38rem 0.85rem; font-size:0.8rem;">
+          🛠️ Ver Solución
+        </button>
         <button id="btn-hero-repeater" class="btn btn-primary" type="button" style="padding:0.38rem 0.85rem; font-size:0.8rem;">
           🔁 Modificar y Reenviar
         </button>
@@ -552,6 +707,9 @@ function renderInspector() {
     <div class="segmented-tabs" role="tablist">
       <button class="seg-btn ${state.activeTab === "security" ? "active" : ""}" data-tab="security" type="button">
         🛡️ Avisos y Escudos (${audit.findings.length})
+      </button>
+      <button class="seg-btn ${state.activeTab === "remediation" ? "active" : ""}" data-tab="remediation" type="button">
+        🛠️ Cómo Solucionarlo
       </button>
       <button class="seg-btn ${state.activeTab === "repeater" ? "active" : ""}" data-tab="repeater" type="button">
         🔁 Repetidor en Vivo
@@ -586,7 +744,44 @@ function renderInspector() {
     });
   }
 
+  const heroRemBtn = document.getElementById("btn-hero-remediation");
+  if (heroRemBtn) {
+    heroRemBtn.addEventListener("click", () => {
+      state.activeTab = "remediation";
+      renderInspector();
+    });
+  }
+
+  wireRemediationEvents(flow);
   wireRepeaterEvents(flow);
+}
+
+function wireRemediationEvents(flow) {
+  if (state.activeTab !== "remediation") return;
+
+  document.querySelectorAll(".stack-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.activeStack = btn.dataset.stack;
+      renderInspector();
+    });
+  });
+
+  const copyBtn = document.getElementById("btn-copy-remediation");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      const codeEl = document.getElementById("remediation-code-block");
+      if (!codeEl) return;
+      try {
+        await navigator.clipboard.writeText(codeEl.textContent);
+        showToast(
+          `Código de solución (${state.activeStack.toUpperCase()}) copiado al portapapeles`,
+          "safe"
+        );
+      } catch {
+        showToast("No se pudo copiar automáticamente al portapapeles", "warn");
+      }
+    });
+  }
 }
 
 function wireRepeaterEvents(flow) {
@@ -598,6 +793,7 @@ function wireRepeaterEvents(flow) {
   document.querySelectorAll("[data-quick-https]").forEach((btn) => {
     btn.addEventListener("click", () => {
       urlInput.value = urlInput.value.replace(/^http:\/\//i, "https://");
+      showToast("URL actualizada a HTTPS", "safe");
     });
   });
 
@@ -608,8 +804,9 @@ function wireRepeaterEvents(flow) {
         const current = JSON.parse(respTextarea.value || "{}");
         current[headerName] = QUICK_SHIELD_VALUES[headerName];
         respTextarea.value = JSON.stringify(current, null, 2);
+        showToast(`Escudo ${headerName} inyectado`, "safe");
       } catch {
-        // Ignore malformed JSON
+        showToast("Revisa el formato JSON de las cabeceras", "warn");
       }
     });
   });
@@ -628,6 +825,7 @@ function wireRepeaterEvents(flow) {
       } catch {
         respTextarea.value = JSON.stringify(QUICK_SHIELD_VALUES, null, 2);
       }
+      showToast("Todos los escudos OWASP inyectados (Nota A)", "safe");
     });
   });
 
@@ -639,7 +837,7 @@ function wireRepeaterEvents(flow) {
       try {
         parsedRespHeaders = JSON.parse(respTextarea.value || "{}");
       } catch {
-        alert("El formato JSON de Cabeceras de Seguridad no es válido.");
+        showToast("El JSON de Cabeceras de Seguridad no es válido", "danger");
         return;
       }
       try {
@@ -647,7 +845,7 @@ function wireRepeaterEvents(flow) {
           document.getElementById("rep-req-headers").value || "{}"
         );
       } catch {
-        alert("El formato JSON de Cabeceras de Petición no es válido.");
+        showToast("El JSON de Cabeceras de Petición no es válido", "danger");
         return;
       }
 
@@ -676,8 +874,13 @@ function wireRepeaterEvents(flow) {
         state.lastComparison = result;
         state.selectedFlowId = result.new_flow.id;
         state.activeTab = "security";
+        showToast(
+          `Petición reenviada: Nota ${result.new_flow.security_audit.grade} (${result.new_flow.security_audit.score}/100)`,
+          getToneByGrade(result.new_flow.security_audit.grade)
+        );
         await fetchTelemetry();
       } else {
+        showToast("Error al reenviar la petición", "danger");
         runBtn.textContent = "🚀 Reenviar Petición y Comparar Nota";
         runBtn.disabled = false;
       }
@@ -711,16 +914,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("btn-export-report").addEventListener("click", () => {
     window.open("/api/v1/report/html", "_blank");
+    showToast("Informe ejecutivo abierto en nueva pestaña", "safe");
   });
 
   document.getElementById("btn-seed-demo").addEventListener("click", async () => {
     await fetch("/api/v1/demo-seed", { method: "POST" });
+    showToast("Ejemplos de demostración cargados", "safe");
     await fetchTelemetry();
   });
 
   document.getElementById("btn-clear").addEventListener("click", async () => {
     state.lastComparison = null;
+    state.remediationCache = {};
     await fetch("/api/v1/flows", { method: "DELETE" });
+    showToast("Lista de peticiones vaciada", "warn");
     await fetchTelemetry();
   });
 
@@ -736,6 +943,67 @@ document.addEventListener("DOMContentLoaded", () => {
     html.setAttribute("data-scale", isLarge ? "normal" : "large");
   });
 
+  // Modal de Auditoría de Web Real en Vivo
+  const liveModal = document.getElementById("live-scan-modal");
+  const liveUrlInput = document.getElementById("live-scan-url");
+  const submitLiveBtn = document.getElementById("btn-submit-live-scan");
+
+  document.getElementById("btn-open-live-scan").addEventListener("click", () => {
+    liveModal.hidden = false;
+    liveUrlInput.focus();
+  });
+
+  document.getElementById("btn-close-live-modal").addEventListener("click", () => {
+    liveModal.hidden = true;
+  });
+
+  document.querySelectorAll("[data-sample-url]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      liveUrlInput.value = btn.getAttribute("data-sample-url");
+    });
+  });
+
+  submitLiveBtn.addEventListener("click", async () => {
+    const targetUrl = liveUrlInput.value.trim();
+    const method = document.getElementById("live-scan-method").value;
+    if (!targetUrl) return;
+
+    const origText = submitLiveBtn.textContent;
+    submitLiveBtn.textContent = "⏳ Conectando con la web...";
+    submitLiveBtn.disabled = true;
+
+    try {
+      const resp = await fetch("/api/v1/scan-live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: targetUrl, method }),
+      });
+
+      if (resp.ok) {
+        const scannedFlow = await resp.json();
+        liveModal.hidden = true;
+        state.selectedFlowId = scannedFlow.id;
+        state.activeTab = "security";
+        const g = scannedFlow.security_audit.grade;
+        showToast(
+          `Web auditada: ${scannedFlow.host} · Nota ${g} (${scannedFlow.security_audit.score}/100) en ${scannedFlow.duration_ms.toFixed(0)} ms`,
+          getToneByGrade(g)
+        );
+        await fetchTelemetry();
+      } else {
+        const errData = await resp.json().catch(() => ({}));
+        showToast(
+          errData.detail || "No se pudo conectar o fue bloqueado por Anti-SSRF",
+          "danger"
+        );
+      }
+    } finally {
+      submitLiveBtn.textContent = origText;
+      submitLiveBtn.disabled = false;
+    }
+  });
+
+  // Modal de Simulación Local
   const modal = document.getElementById("simulator-modal");
   document.getElementById("btn-open-simulator").addEventListener("click", () => {
     modal.hidden = false;
@@ -760,6 +1028,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }),
     });
     modal.hidden = true;
+    showToast("Petición simulada añadida a la lista", "safe");
     await fetchTelemetry();
   });
 

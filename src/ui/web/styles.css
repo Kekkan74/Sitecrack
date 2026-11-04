@@ -1001,3 +1001,227 @@ html, body {
   outline: none;
 }
 
+/* ==========================================================================
+   Anillo Gráfico SVG Animado (Score Ring) en el Banner Hero Glass
+   ========================================================================== */
+.score-ring-wrap {
+  position: relative;
+  width: 4.5rem;
+  height: 4.5rem;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.score-ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.score-ring-bg {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.25);
+  stroke-width: 7;
+}
+
+.score-ring-fill {
+  fill: none;
+  stroke-width: 7;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.score-ring-fill.safe {
+  stroke: var(--safe-solid);
+}
+
+.score-ring-fill.warn {
+  stroke: var(--warn-solid);
+}
+
+.score-ring-fill.danger {
+  stroke: var(--danger-solid);
+}
+
+.score-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.05;
+}
+
+.score-ring-grade {
+  font-weight: 800;
+  font-size: 1.35rem;
+  color: var(--text-main);
+}
+
+.score-ring-pts {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   Barra Visual de Salud Global (Multi-segmento) en el Banner Superior
+   ========================================================================== */
+.health-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  min-width: 165px;
+}
+
+.health-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.health-bar-track {
+  height: 8px;
+  width: 100%;
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+}
+
+.health-seg-safe {
+  background: var(--safe-solid);
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.health-seg-warn {
+  background: var(--warn-solid);
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.health-seg-danger {
+  background: var(--danger-solid);
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+/* ==========================================================================
+   Generador de Código de Solución (Copy & Paste)
+   ========================================================================== */
+.remediation-card {
+  border: 1.5px solid var(--glass-outer-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  background: var(--glass-card-bg);
+  backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.remediation-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.stack-selector {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.stack-btn {
+  padding: 0.4rem 0.85rem;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-outer-border);
+  background: var(--bg-muted);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.stack-btn.active {
+  background: var(--accent);
+  color: #FFFFFF;
+  border-color: transparent;
+  box-shadow: 0 3px 10px var(--accent-glow);
+}
+
+/* Botón Destacado para Auditar Web Real */
+.btn-live-scan {
+  background: linear-gradient(135deg, #10B981 0%, #0EA5E9 100%);
+  color: #FFFFFF;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.28);
+}
+
+.btn-live-scan:hover {
+  background: linear-gradient(135deg, #059669 0%, #0284C7 100%);
+}
+
+/* ==========================================================================
+   Notificaciones Flotantes (Glass Toast)
+   ========================================================================== */
+.toast-container {
+  position: fixed;
+  bottom: 1.4rem;
+  right: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  z-index: 250;
+  pointer-events: none;
+}
+
+.glass-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.8rem 1.15rem;
+  border-radius: var(--radius-md);
+  background: var(--glass-panel-bg);
+  backdrop-filter: blur(22px) saturate(190%);
+  -webkit-backdrop-filter: blur(22px) saturate(190%);
+  border: 1.5px solid var(--glass-border);
+  border-left: 5px solid var(--safe-solid);
+  box-shadow: var(--glass-shadow);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+  animation: toastSlideIn 0.25s ease forwards;
+}
+
+.glass-toast.toast-warn {
+  border-left-color: var(--warn-solid);
+}
+
+.glass-toast.toast-danger {
+  border-left-color: var(--danger-solid);
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+

@@ -11,16 +11,19 @@ from typing import List
 from unittest.mock import MagicMock
 
 from src.api.api_server import (
+    LiveScanRequest,
     SimulationRequest,
     clear_captured_flows,
     export_html_report,
     export_json_report,
     get_flow_detail,
+    get_flow_remediation_code,
     get_traffic_stats,
     health_check,
     ingest_flow,
     list_captured_flows,
     repeat_and_audit_flow,
+    scan_live_website,
     seed_demo_flows,
     serve_graphical_app,
     simulate_custom_flow,
@@ -242,5 +245,60 @@ def test_repeater_before_after_comparison_and_ssrf_guard(tmp_path: Path) -> None
 
     json_report = export_json_report(repo=repo)
     assert json_report["stats"]["total_flows"] == 2  # type: ignore[index]
+
+
+def test_remediation_code_generator_for_stacks(tmp_path: Path) -> None:
+    repo = SQLiteFlowRepository(db_path=tmp_path / "remediation.db")
+    vuln_flow = simulate_custom_flow(
+        sim=SimulationRequest(
+            url="https://tienda.ejemplo.es/checkout",
+            method="GET",
+            status_code=200,
+            preset="vulnerable",
+        ),
+        repo=repo,
+    )
+
+    remediation = get_flow_remediation_code(flow_id=vuln_flow.id, repo=repo)
+    assert "Strict-Transport-Security" in remediation["missing_headers"]  # type: ignore[operator]
+    assert "@app.middleware" in str(remediation["fastapi"])
+    assert "add_header Strict-Transport-Security" in str(remediation["nginx"])
+    assert "Header always set" in str(remediation["apache"])
+    assert "app.use" in str(remediation["express"])
+
+
+def test_live_website_scanner_ssrf_block_and_real_public_web(tmp_path: Path) -> None:
+    import pytest
+    from fastapi import HTTPException
+
+    repo = SQLiteFlowRepository(db_path=tmp_path / "live_scan.db")
+
+    # 1. Verificar que IPs internas / loopback son bloqueadas por Anti-SSRF (CWE-918)
+    with pytest.raises(HTTPException) as exc_info:
+        scan_live_website(
+            payload=LiveScanRequest(url="http://127.0.0.1:8000/health", method="GET"),
+            repo=repo,
+        )
+    assert exc_info.value.status_code == 403
+
+    # 2. Auditar webs públicas reales en vivo (example.com y github.com)
+    real_example = scan_live_website(
+        payload=LiveScanRequest(url="https://example.com", method="GET"),
+        repo=repo,
+    )
+    assert real_example.host == "example.com"
+    assert real_example.status_code == 200
+    assert real_example.duration_ms > 0
+    assert real_example.security_audit.grade in ("A", "B", "C", "D", "F")
+
+    real_github = scan_live_website(
+        payload=LiveScanRequest(url="https://github.com", method="GET"),
+        repo=repo,
+    )
+    assert "github.com" in real_github.host
+    assert real_github.status_code == 200
+    assert real_github.security_audit.grade in ("A", "B")
+    assert real_github.security_audit.score >= 80
+
 
 
