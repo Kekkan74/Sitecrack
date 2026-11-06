@@ -29,6 +29,11 @@ from src.core.remediation_generator import generate_remediation_snippets
 from src.core.repeater_service import RepeaterService
 from src.core.report_generator import generate_html_audit_report
 from src.core.security_analyzer import PassiveSecurityAnalyzer, sanitize_headers
+from src.core.stealth_engine import (
+    AnonymityAuditReport,
+    StealthConfig,
+    default_stealth_engine,
+)
 from src.domain.schemas import (
     HttpFlowCreate,
     HttpFlowRecord,
@@ -63,6 +68,13 @@ class LiveScanRequest(BaseModel):
 
     url: str = Field(..., min_length=4, max_length=2048, examples=["https://github.com"])
     method: Literal["GET", "HEAD"] = "GET"
+
+
+class StealthPreviewRequest(BaseModel):
+    """Solicitud para previsualizar la desinfección de URL y cabeceras en Modo Sigilo."""
+
+    url: str = Field(..., min_length=1, max_length=4096)
+    headers: Dict[str, str] = Field(default_factory=dict)
 
 
 @lru_cache(maxsize=1)
@@ -388,4 +400,50 @@ def export_json_report(
         "service": "Sitecrack Passive Security Auditor",
         "stats": stats.model_dump(),
         "flows": [f.model_dump() for f in flows],
+    }
+
+
+@app.get(
+    "/api/v1/stealth",
+    tags=["Stealth & Anonymity"],
+)
+def get_stealth_status() -> dict[str, object]:
+    """Obtiene el estado actual del Modo Sigilo, configuración y métricas de desinfección."""
+    return {
+        "config": default_stealth_engine.config.model_dump(),
+        "total_tracking_params_stripped": default_stealth_engine.total_tracking_params_stripped,
+        "total_headers_anonymized": default_stealth_engine.total_headers_anonymized,
+    }
+
+
+@app.post(
+    "/api/v1/stealth",
+    tags=["Stealth & Anonymity"],
+)
+def update_stealth_status(config: StealthConfig) -> dict[str, object]:
+    """Actualiza la configuración del Modo Sigilo en caliente."""
+    default_stealth_engine.update_config(config)
+    return {
+        "status": "updated",
+        "config": default_stealth_engine.config.model_dump(),
+    }
+
+
+@app.post(
+    "/api/v1/stealth/preview",
+    tags=["Stealth & Anonymity"],
+)
+def preview_stealth_sanitization(payload: StealthPreviewRequest) -> dict[str, object]:
+    """Evalúa y muestra en vivo la desinfección de URL, cabeceras y grado de privacidad."""
+    clean_url, stripped = default_stealth_engine.sanitize_url(payload.url)
+    clean_hdrs, actions = default_stealth_engine.sanitize_request_headers(payload.headers)
+    audit = default_stealth_engine.evaluate_request_privacy(payload.url, payload.headers)
+    return {
+        "original_url": payload.url,
+        "sanitized_url": clean_url,
+        "stripped_tracking_params": stripped,
+        "original_headers": payload.headers,
+        "sanitized_headers": clean_hdrs,
+        "actions_taken": actions,
+        "privacy_audit": audit.model_dump(),
     }

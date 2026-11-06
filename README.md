@@ -72,13 +72,20 @@ A diferencia de suites convencionales complejas de interpretar, Sitecrack transf
      - 🪶 **Apache** (Reglas `Header always set` para `.htaccess` o `httpd.conf`).
      - 🟩 **Node.js (Express)** (Middleware con `res.setHeader`).
    - Pulsa **"📋 Copiar código de solución"** para guardar el fragmento en el portapapeles.
-4. **🔁 Repetidor en Vivo y Laboratorio de Corrección:**
+4. **🕵️ Escudo de Privacidad y Anonimato Web (Stealth Mode):**
+   - En el encabezado superior verás el botón **`🕵️ Anonimato: ON`**. Al pulsarlo se abre el panel de control del motor de sigilo.
+   - **Depuración de URLs en tiempo real:** Elimina automáticamente parámetros espía de rastreo (`fbclid`, `gclid`, `utm_source`, `utm_medium`, `_ga`, etc.) antes de que salgan a la red.
+   - **Neutralización de Client Hints:** Suprime cabeceras `Sec-CH-UA*` que delatan la arquitectura, modelo y hardware de tu equipo.
+   - **Supresión de Referer:** Impide que los servidores conozcan tu historial o la página web previa de la que procedes.
+   - **Suplantación de Huella (User-Agent):** Homogeneiza tu navegador bajo la firma neutra estándar de privacidad (Tor Browser ESR).
+   - **Enrutamiento Upstream SOCKS5 / Tor:** Permite canalizar todo el tráfico hacia la red Tor (`socks5h://127.0.0.1:9050`) para cambiar tu IP pública real.
+5. **🔁 Repetidor en Vivo y Laboratorio de Corrección:**
    - En la pestaña **`🔁 Repetidor en Vivo`**, puedes editar el método HTTP, la URL y las cabeceras.
    - Usa los botones rápidos (ej. `＋ Añadir HSTS`, `＋ Añadir CSP` o `✨ Blindar Todo`) y pulsa **"🚀 Reenviar Petición y Comparar Nota"** para ver cómo sube la puntuación en el comparador *Antes vs. Después*.
-5. **🍪 Inspector de Sesiones y Cookies:**
+6. **🍪 Inspector de Sesiones y Cookies:**
    - Revisa si las cookies de sesión incluyen los atributos críticos `Secure`, `HttpOnly` y `SameSite`.
    - Las cabeceras confidenciales (`Authorization: Bearer ...` y `Cookie`) son enmascaradas automáticamente bajo el estándar **CWE-532** para impedir fugas en registros.
-6. **📄 Exportador de Informes Ejecutivos:**
+7. **📄 Exportador de Informes Ejecutivos:**
    - Haz clic en **`📄 Exportar Informe`** en el banner superior para generar un reporte ejecutivo en HTML interactivo con tablas de hallazgos, métricas agregadas y diseño listo para imprimir o guardar en PDF (`Ctrl + P`).
 
 ---

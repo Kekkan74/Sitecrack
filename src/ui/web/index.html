@@ -23,6 +23,7 @@
         <span class="stat-pill pill-https">🔒 Seguras (HTTPS) <strong id="stat-https">0</strong></span>
         <span class="stat-pill pill-alerts">🚨 Con avisos <strong id="stat-low-sec">0</strong></span>
         <span class="stat-pill pill-speed">⚡ Media <strong id="stat-latency">0 ms</strong></span>
+        <span id="pill-stealth" class="stat-pill pill-stealth" title="Rastreadores y parámetros espía eliminados">🛡️ Sigilo <strong id="stat-stealth-count">0</strong></span>
 
         <!-- Barra Visual de Salud Global -->
         <div class="health-bar-wrapper" title="Proporción de peticiones seguras frente a peticiones con avisos">
@@ -39,6 +40,9 @@
       </div>
 
       <div class="nav-actions">
+        <button id="btn-open-stealth" class="btn btn-stealth" type="button" title="Configurar Modo Sigilo y Anonimato Web">
+          🕵️ Anonimato: <strong id="label-stealth-state">ON</strong>
+        </button>
         <button id="btn-open-live-scan" class="btn btn-live-scan" type="button" title="Conectar en tiempo real a una web pública y auditar sus escudos">
           🌐 Auditar Web Real
         </button>
@@ -190,6 +194,64 @@
       <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.5rem;">
         <button id="btn-close-modal" class="btn" type="button">Cancelar</button>
         <button id="btn-submit-sim" class="btn btn-primary" type="button">Analizar petición</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ventana Modal Glass para Configuración del Modo Sigilo / Anonimato -->
+  <div id="stealth-modal" class="modal-backdrop" hidden>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="stealth-modal-title" style="max-width: 540px;">
+      <div>
+        <h2 id="stealth-modal-title" style="font-size:1.1rem; font-weight:800;">🕵️ Escudo de Privacidad y Anonimato Web</h2>
+        <p style="font-size:0.83rem; color:var(--text-muted); margin-top:0.2rem;">
+          Desinfecta tu tráfico en tiempo real: neutraliza parámetros espía, bloquea telemetría del navegador y suplanta tu huella digital.
+        </p>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:0.65rem; background:var(--bg-muted); padding:0.9rem; border-radius:var(--radius-md); border:1px solid var(--glass-outer-border);">
+        <label style="display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-size:0.86rem; font-weight:700;">
+          <span>🛡️ Activar Modo Sigilo General</span>
+          <input id="stealth-chk-enabled" type="checkbox" checked />
+        </label>
+        <label style="display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-size:0.83rem; color:var(--text-secondary);">
+          <span>🧹 Eliminar parámetros espía de URLs (utm_*, fbclid, gclid, etc.)</span>
+          <input id="stealth-chk-params" type="checkbox" checked />
+        </label>
+        <label style="display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-size:0.83rem; color:var(--text-secondary);">
+          <span>🚫 Suprimir cabecera Referer (no filtrar página previa)</span>
+          <input id="stealth-chk-referer" type="checkbox" checked />
+        </label>
+        <label style="display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-size:0.83rem; color:var(--text-secondary);">
+          <span>🔒 Bloquear Client Hints de hardware (Sec-CH-UA*)</span>
+          <input id="stealth-chk-hints" type="checkbox" checked />
+        </label>
+        <label style="display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-size:0.83rem; color:var(--text-secondary);">
+          <span>🎭 Suplantar User-Agent por firma uniforme (Tor / Firefox Privacy)</span>
+          <input id="stealth-chk-ua" type="checkbox" checked />
+        </label>
+      </div>
+
+      <div class="field">
+        <label for="stealth-upstream-proxy">🌐 Enrutamiento Anónimo Upstream (SOCKS5 / Red Tor)</label>
+        <input id="stealth-upstream-proxy" class="search-input" type="text" value="socks5h://127.0.0.1:9050" placeholder="socks5h://127.0.0.1:9050" />
+        <span style="font-size:0.75rem; color:var(--text-muted); margin-top:0.2rem;">
+          Canaliza las conexiones salientes a través de la red Tor o un proxy SOCKS5 local para ocultar tu IP pública real.
+        </span>
+      </div>
+
+      <!-- Probador Interactivo de Desinfección en Vivo -->
+      <div style="border-top:1px dashed var(--glass-outer-border); padding-top:0.75rem;">
+        <div style="font-size:0.8rem; font-weight:700; margin-bottom:0.35rem;">⚡ Probar desinfección de URL con rastreadores:</div>
+        <div style="display:flex; gap:0.4rem;">
+          <input id="stealth-test-url" class="search-input" type="text" value="https://tienda.com/producto?utm_source=facebook&fbclid=IwAR09xyz&color=azul" />
+          <button id="btn-test-stealth" class="btn" type="button">Limpiar</button>
+        </div>
+        <div id="stealth-test-result" style="margin-top:0.5rem; font-size:0.78rem; font-family:var(--font-mono); color:var(--safe-text); word-break:break-all;"></div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:0.5rem;">
+        <button id="btn-close-stealth-modal" class="btn" type="button">Cerrar</button>
+        <button id="btn-save-stealth" class="btn btn-primary" type="button">💾 Guardar Configuración</button>
       </div>
     </div>
   </div>

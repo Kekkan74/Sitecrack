@@ -35,6 +35,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.core.security_analyzer import PassiveSecurityAnalyzer, sanitize_headers
+from src.core.stealth_engine import StealthEngine, default_stealth_engine
 from src.domain.schemas import HttpFlowCreate
 
 logger = logging.getLogger("sitecrack.proxy")
@@ -150,14 +151,42 @@ class SitecrackInterceptorAddon:
         self,
         publisher: Optional[FlowPublisherProtocol] = None,
         analyzer: Optional[PassiveSecurityAnalyzer] = None,
+        stealth: Optional[StealthEngine] = None,
     ) -> None:
         self._publisher: FlowPublisherProtocol = publisher or AsyncQueueHttpPublisher()
         self._analyzer: PassiveSecurityAnalyzer = analyzer or PassiveSecurityAnalyzer()
+        self._stealth: StealthEngine = stealth or default_stealth_engine
         self._flow_timers: dict[str, float] = {}
 
     def request(self, flow: http.HTTPFlow | Any) -> None:
         """Hook disparado al recibir los encabezados/cuerpo de la petición."""
         self._flow_timers[flow.id] = time.perf_counter()
+
+        # Desinfección activa en Modo Sigilo / Anonimato (Anti-Tracking)
+        if self._stealth.config.enabled and hasattr(flow, "request"):
+            try:
+                # 1. Depuración de parámetros espía en URL (utm_*, fbclid, etc.)
+                if hasattr(flow.request, "url"):
+                    clean_url, stripped = self._stealth.sanitize_url(flow.request.url)
+                    if stripped:
+                        flow.request.url = clean_url
+                        logger.info(
+                            "🛡️ Modo Sigilo: %d parámetros de rastreo eliminados en %s",
+                            len(stripped),
+                            flow.request.pretty_host,
+                        )
+
+                # 2. Desinfección de cabeceras (User-Agent neutro, Referer y Client Hints)
+                if hasattr(flow.request, "headers"):
+                    req_hdrs = dict(flow.request.headers.items(multi=False))
+                    clean_hdrs, actions = self._stealth.sanitize_request_headers(req_hdrs)
+                    for k in list(flow.request.headers.keys()):
+                        if k not in clean_hdrs:
+                            del flow.request.headers[k]
+                    for k, v in clean_hdrs.items():
+                        flow.request.headers[k] = v
+            except Exception as exc:
+                logger.debug("Error aplicando Modo Sigilo en request: %s", exc)
 
     def response(self, flow: http.HTTPFlow | Any) -> None:
         """Hook disparado al completarse la respuesta del servidor remoto."""

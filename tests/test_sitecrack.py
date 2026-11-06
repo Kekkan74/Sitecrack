@@ -13,25 +13,30 @@ from unittest.mock import MagicMock
 from src.api.api_server import (
     LiveScanRequest,
     SimulationRequest,
+    StealthPreviewRequest,
     clear_captured_flows,
     export_html_report,
     export_json_report,
     get_flow_detail,
     get_flow_remediation_code,
+    get_stealth_status,
     get_traffic_stats,
     health_check,
     ingest_flow,
     list_captured_flows,
+    preview_stealth_sanitization,
     repeat_and_audit_flow,
     scan_live_website,
     seed_demo_flows,
     serve_graphical_app,
     simulate_custom_flow,
+    update_stealth_status,
 )
 from src.api.database import SQLiteFlowRepository
 from src.core.proxy_core import MAX_PREVIEW_BYTES, SitecrackInterceptorAddon
 from src.core.repeater_service import is_safe_public_host
 from src.core.security_analyzer import PassiveSecurityAnalyzer, sanitize_headers
+from src.core.stealth_engine import StealthConfig, StealthEngine
 from src.domain.schemas import HttpFlowCreate, HttpFlowRecord, RepeatFlowRequest
 from src.ui.cli_app import (
     build_inspector_renderable,
@@ -299,6 +304,64 @@ def test_live_website_scanner_ssrf_block_and_real_public_web(tmp_path: Path) -> 
     assert real_github.status_code == 200
     assert real_github.security_audit.grade in ("A", "B")
     assert real_github.security_audit.score >= 80
+
+
+def test_stealth_engine_sanitization_and_privacy_audit() -> None:
+    engine = StealthEngine(
+        config=StealthConfig(
+            enabled=True,
+            strip_tracking_params=True,
+            strip_referer=True,
+            strip_client_hints=True,
+            spoof_user_agent=True,
+        )
+    )
+
+    # 1. Desinfección de parámetros espía en URL
+    dirty_url = "https://tienda.es/compra?utm_source=twitter&fbclid=123456&item=portatil&gclid=789"
+    clean_url, stripped = engine.sanitize_url(dirty_url)
+    assert "utm_source" in stripped
+    assert "fbclid" in stripped
+    assert "gclid" in stripped
+    assert "item=portatil" in clean_url
+    assert "fbclid" not in clean_url
+    assert "utm_source" not in clean_url
+
+    # 2. Desinfección de cabeceras de telemetría y Client Hints
+    dirty_headers = {
+        "Referer": "https://red-social.com/feed",
+        "Sec-CH-UA": '"Chromium";v="128"',
+        "Sec-CH-UA-Platform": '"Windows"',
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SpecificCustomBrowser/99.0",
+        "Accept": "text/html",
+    }
+    clean_headers, actions = engine.sanitize_request_headers(dirty_headers)
+    assert "Referer" not in clean_headers
+    assert "Sec-CH-UA" not in clean_headers
+    assert "Sec-CH-UA-Platform" not in clean_headers
+    assert "Firefox" in clean_headers["User-Agent"]
+    assert clean_headers["Accept"] == "text/html"
+    assert len(actions) >= 3
+
+    # 3. Diagnóstico de nivel de privacidad
+    audit = engine.evaluate_request_privacy(dirty_url, dirty_headers)
+    assert audit.anonymity_score < 70
+    assert len(audit.leaked_attributes) >= 3
+
+    # 4. Endpoints API de FastAPI para Modo Sigilo
+    status = get_stealth_status()
+    assert "config" in status
+    assert status["config"]["enabled"] is True  # type: ignore[index]
+
+    preview = preview_stealth_sanitization(
+        StealthPreviewRequest(
+            url="https://ejemplo.com/path?utm_medium=email&query=test",
+            headers={"Referer": "https://origen.com", "Accept": "*/*"},
+        )
+    )
+    assert "utm_medium" in preview["stripped_tracking_params"]  # type: ignore[operator]
+    assert "Referer" not in preview["sanitized_headers"]  # type: ignore[operator]
+
 
 
 

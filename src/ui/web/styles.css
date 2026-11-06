@@ -259,6 +259,18 @@ html, body {
   border-color: var(--warn-border);
 }
 
+.stat-pill.pill-stealth {
+  background: rgba(99, 102, 241, 0.16);
+  color: #4F46E5;
+  border-color: rgba(99, 102, 241, 0.45);
+}
+
+[data-theme="dark"] .stat-pill.pill-stealth {
+  background: rgba(99, 102, 241, 0.28);
+  color: #A5B4FC;
+  border-color: rgba(129, 140, 248, 0.55);
+}
+
 /* Botones de Acción */
 .nav-actions {
   display: flex;
@@ -1170,6 +1182,25 @@ html, body {
 
 .btn-live-scan:hover {
   background: linear-gradient(135deg, #059669 0%, #0284C7 100%);
+}
+
+/* Botón Destacado para Modo Sigilo / Anonimato */
+.btn-stealth {
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  color: #FFFFFF;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.32);
+}
+
+.btn-stealth:hover {
+  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+}
+
+.btn-stealth.off {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+  box-shadow: none;
+  border: 1px solid var(--glass-outer-border);
 }
 
 /* ==========================================================================

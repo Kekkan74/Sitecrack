@@ -14,6 +14,7 @@ const state = {
   methodFilter: "",
   gradeFilter: "",
   lastComparison: null,
+  stealthConfig: null,
 };
 
 const PROTECTIONS_GUIDE = [
@@ -1032,6 +1033,133 @@ document.addEventListener("DOMContentLoaded", () => {
     await fetchTelemetry();
   });
 
+  // Modal y Control del Modo Sigilo / Anonimato Web
+  const stealthModal = document.getElementById("stealth-modal");
+  const btnOpenStealth = document.getElementById("btn-open-stealth");
+  const btnCloseStealth = document.getElementById("btn-close-stealth-modal");
+  const btnSaveStealth = document.getElementById("btn-save-stealth");
+  const btnTestStealth = document.getElementById("btn-test-stealth");
+
+  async function fetchStealthStatus() {
+    try {
+      const resp = await fetch("/api/v1/stealth");
+      if (!resp.ok) return;
+      const data = await resp.json();
+      state.stealthConfig = data.config;
+
+      const label = document.getElementById("label-stealth-state");
+      if (label) {
+        label.textContent = data.config.enabled ? "ON" : "OFF";
+      }
+      if (btnOpenStealth) {
+        if (data.config.enabled) {
+          btnOpenStealth.classList.remove("off");
+        } else {
+          btnOpenStealth.classList.add("off");
+        }
+      }
+
+      const countEl = document.getElementById("stat-stealth-count");
+      if (countEl) {
+        countEl.textContent = (
+          (data.total_tracking_params_stripped || 0) +
+          (data.total_headers_anonymized || 0)
+        );
+      }
+
+      // Sincronizar campos del modal si no está editándose activamente
+      const chkEnabled = document.getElementById("stealth-chk-enabled");
+      if (chkEnabled && stealthModal.hidden) {
+        chkEnabled.checked = data.config.enabled;
+        document.getElementById("stealth-chk-params").checked =
+          data.config.strip_tracking_params;
+        document.getElementById("stealth-chk-referer").checked =
+          data.config.strip_referer;
+        document.getElementById("stealth-chk-hints").checked =
+          data.config.strip_client_hints;
+        document.getElementById("stealth-chk-ua").checked =
+          data.config.spoof_user_agent;
+        document.getElementById("stealth-upstream-proxy").value =
+          data.config.upstream_proxy || "";
+      }
+    } catch {
+      // Endpoint fallback
+    }
+  }
+
+  btnOpenStealth.addEventListener("click", () => {
+    stealthModal.hidden = false;
+  });
+
+  btnCloseStealth.addEventListener("click", () => {
+    stealthModal.hidden = true;
+  });
+
+  btnSaveStealth.addEventListener("click", async () => {
+    const updated = {
+      enabled: document.getElementById("stealth-chk-enabled").checked,
+      strip_tracking_params: document.getElementById("stealth-chk-params").checked,
+      strip_referer: document.getElementById("stealth-chk-referer").checked,
+      strip_client_hints: document.getElementById("stealth-chk-hints").checked,
+      spoof_user_agent: document.getElementById("stealth-chk-ua").checked,
+      custom_user_agent: "Mozilla/5.0 (Windows NT 10.0; rv:128.0) Gecko/20100101 Firefox/128.0",
+      upstream_proxy: document.getElementById("stealth-upstream-proxy").value.trim() || null,
+    };
+
+    const resp = await fetch("/api/v1/stealth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updated),
+    });
+
+    if (resp.ok) {
+      stealthModal.hidden = true;
+      showToast(
+        `Modo Sigilo ${updated.enabled ? "ACTIVADO (Rastreo bloqueado)" : "DESACTIVADO"}`,
+        updated.enabled ? "safe" : "warn"
+      );
+      await fetchStealthStatus();
+    }
+  });
+
+  btnTestStealth.addEventListener("click", async () => {
+    const rawUrl = document.getElementById("stealth-test-url").value.trim();
+    const resultBox = document.getElementById("stealth-test-result");
+    if (!rawUrl) return;
+
+    const resp = await fetch("/api/v1/stealth/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: rawUrl,
+        headers: {
+          "Referer": "https://red-social.com/feed",
+          "Sec-CH-UA": '"Chromium";v="128", "Not;A=Brand";v="24"',
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0",
+        },
+      }),
+    });
+
+    if (resp.ok) {
+      const data = await resp.json();
+      const removedText =
+        data.stripped_tracking_params.length > 0
+          ? `[🧹 Eliminados: ${data.stripped_tracking_params.join(", ")}]`
+          : "[Sin parámetros espía]";
+      resultBox.innerHTML = `
+        <strong>URL Limpia:</strong> ${escapeHtml(data.sanitized_url)}<br/>
+        <span style="color:var(--warn-text);">${escapeHtml(removedText)}</span><br/>
+        <span style="color:var(--accent);">🛡️ ${escapeHtml(data.privacy_audit.verdict)}</span>
+      `;
+      showToast("URL desinfectada correctamente", "safe");
+      await fetchStealthStatus();
+    }
+  });
+
   fetchTelemetry();
-  setInterval(fetchTelemetry, 4000);
+  fetchStealthStatus();
+  setInterval(() => {
+    fetchTelemetry();
+    fetchStealthStatus();
+  }, 4000);
 });
